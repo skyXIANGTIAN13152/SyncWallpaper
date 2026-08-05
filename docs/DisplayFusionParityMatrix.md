@@ -23,7 +23,7 @@
 - 加上默认集成运行，当前 RC1 有 138 个通过（125 单元 + 13 集成）和 2 个环境 Skip；剩余未验证重点是 Win10、模式变化/音频切换/窗口恢复/Explorer/睡眠和长时间资源稳定性。
 - 其中已有三屏真实运行验证：MonitorDiscoveryService 能取得原生显示路径和 EDID/WMI 信息，WallpaperApplyService 能在当前 Windows 11 机器上设置并再次读取三个屏幕的壁纸状态。
 - 当前显示器匹配已经实现“序列号/厂商/产品代码 → monitorDevicePath → 硬件拓扑字段 → 几何”的分层策略；相同型号、没有可区分字段时返回 Ambiguous，不按 Windows 临时编号猜测。
-- 阶段 1.5 100 次只读资源探针和发布版 60 秒 smoke 已有记录；本轮安全 soak 已完成，`artifacts/diagnostics/soak-60m.json` 的 `ActualDurationSeconds=3601.5955`、`SampleCount=61`、`Cancelled=false`。这些采样不代表模块按进程分摊，也不构成 Verified 承诺。
+- 阶段 1.5 100 次只读资源探针和发布版 smoke 已有记录；RC1 最终 Real-Time Soak 实际运行 60.6 秒、13 个样本、睡眠排除 0 秒、qualified12Hour=false；100,000 次 Accelerated 事件 174.5 ms。短测不代表 12 小时硬件 soak，也不构成 Verified 承诺。
 
 ## DisplayFusion 功能矩阵
 

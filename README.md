@@ -65,7 +65,7 @@
 
     artifacts\publish\win-x64\Diagnostics\SyncWallpaper.Diagnostics.exe
 
-`publish.ps1` 生成 framework-dependent Beta 包；`publish-selfcontained.ps1` 生成可选 self-contained 包。发布目录同时带有 AppIcon.ico、SVG、许可证、变更记录、第三方声明和 docs，不包含测试数据、密钥或开发机绝对路径。
+publish.ps1 生成 framework-dependent RC1 包；publish-selfcontained.ps1 生成 self-contained RC1 包。发布目录同时带有 AppIcon.ico、SVG、许可证、变更记录、第三方声明、安装脚本和 docs，不包含测试数据、密钥或开发机绝对路径。
 
 ## RC1 验收、安装与恢复
 
@@ -83,7 +83,7 @@ Wallpapers、Config、Backups\Deleted、Logs、Thumbnails、Cache\Rendered。`Co
     artifacts\publish\win-x64\SyncWallpaper.Diagnostics.exe verify
     artifacts\publish\win-x64\SyncWallpaper.Diagnostics.exe soak --duration-minutes 60 --interval-seconds 60
 
-本轮安全 soak 的实测报告为 `artifacts/diagnostics/soak-60m.json`（3601.5955 秒、61 个样本）；最终发布版字段 smoke 为 `artifacts/diagnostics/soak-final-smoke.json`。soak 只启动屏序自己创建的测试宿主，报告包含 Working Set、Private Bytes、句柄、线程、GDI/USER、CPU、宿主状态/错误和趋势阈值，不会改动显示、音频、窗口或 Explorer。
+RC1 最终短时 Real-Time Soak 报告为 artifacts/diagnostics/rc1-final-realtime-soak-1m.json（60.6 秒、13 个样本，qualified12Hour=false）；Accelerated 报告为 artifacts/diagnostics/rc1-final-accelerated-100k.json。12 小时必须由用户运行 realtime-soak --duration-minutes 720 后才可标记合格。soak 只启动屏序自己创建的测试宿主，报告包含 Working Set、Private Bytes、句柄、线程、GDI/USER、CPU、宿主状态/错误和睡眠排除时间，不会改动显示、音频、窗口或 Explorer。
 
 首次运行会尝试导入桌面 wallpaper\本体.*、横屏1.*、竖屏1.*。壁纸被复制到托管目录后，原文件移动不会影响托管副本。
 

@@ -14,6 +14,7 @@ RC1 主要提交：1e29f6f、3fe829e
 - 配置文件大小/深度/文件名安全限制、最多 5 个恢复点和显式恢复 API。
 - 挂起/恢复状态机、Explorer 退避模型和混合 DPI 布局验证器。
 - RC1 x64 framework-dependent/self-contained/portable ZIP 发布脚本、SHA256、当前用户安装/升级/卸载脚本。
+- 安全模式策略：连续启动失败、配置/宿主故障、回滚失败或 Profile oscillation 可进入只读诊断模式；退出需要用户明确确认。
 
 ## 实际测试
 
@@ -22,7 +23,9 @@ RC1 主要提交：1e29f6f、3fe829e
 - 集成测试：13 通过、2 Skip（当前会话桌面 Shell 视图不可读；真实显示配置回环需要显式环境变量）。
 - 只读硬件验收：3 条活动显示路径，0 项前后快照差异；无任何桌面变更。
 - 新增 50,000 事件拓扑合并、手动优先、身份脱敏、快照比较、事务状态、挂起恢复、混合 DPI、Explorer 退避、安全模式和 5 个恢复点测试。
-- 真实时间 soak：60.6 秒、13 个样本、12 小时门槛为否；另有 100,000 次加速事件，157.3 ms，稳定输出 1 次。
+- 真实时间 soak：60.6 秒、13 个样本、12 小时门槛为否；另有 100,000 次加速事件，174.5 ms，稳定输出 1 次。
+- 安装/升级/卸载 smoke：安装、升级、程序文件移除均为 true，配置数据保留，systemMutation=false。
+- 发布包：artifacts/publish/SyncWallpaper-1.0.0-rc.1-win-x64.zip 和 artifacts/publish/SyncWallpaper-1.0.0-rc.1-win-x64-selfcontained.zip；SHA256 位于同名 .sha256 文件。
 
 ## 未宣称完成
 
