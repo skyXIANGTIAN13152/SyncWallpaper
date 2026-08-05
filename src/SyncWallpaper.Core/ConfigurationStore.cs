@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text;
 
 namespace SyncWallpaper.Core;
 
@@ -20,14 +21,17 @@ public sealed class DataPaths
 
 public sealed class ConfigurationStore
 {
-    private readonly JsonSerializerOptions _options = new(JsonSerializerDefaults.Web) { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
+    private const long MaxConfigurationBytes = 10 * 1024 * 1024;
+    private const int MaxRecoveryVersions = 5;
+    private readonly JsonSerializerOptions _options = new(JsonSerializerDefaults.Web) { WriteIndented = true, MaxDepth = 32, Converters = { new JsonStringEnumConverter() } };
     private readonly object _gate = new();
     private readonly IFaultInjector _faultInjector;
     public DataPaths Paths { get; }
     public ConfigurationStore(DataPaths? paths = null, IFaultInjector? faultInjector = null) { Paths = paths ?? new DataPaths(); Paths.Ensure(); _faultInjector = faultInjector ?? NoFaultInjector.Instance; }
 
-    public T Load<T>(string fileName, T fallback)
+    public T Load<T>(string fileName, T fallback, Func<T, bool>? validator = null)
     {
+        ValidateFileName(fileName);
         var path = Path.Combine(Paths.Config, fileName); var backup = Path.Combine(Paths.Backups, fileName + ".bak");
         lock (_gate)
         {
@@ -35,9 +39,14 @@ public sealed class ConfigurationStore
             {
                 try { _faultInjector.ThrowIfRequested(FaultPoint.ConfigurationCorrupt); } catch (InjectedFaultException) { return fallback; }
             }
-            foreach (var candidate in new[] { path, backup })
+            foreach (var candidate in RecoveryCandidates(fileName, path, backup))
             {
-                try { if (File.Exists(candidate)) { var value = JsonSerializer.Deserialize<T>(File.ReadAllText(candidate), _options); if (value is not null) return value; } }
+                try
+                {
+                    if (!File.Exists(candidate) || new FileInfo(candidate).Length > MaxConfigurationBytes) continue;
+                    var value = JsonSerializer.Deserialize<T>(File.ReadAllText(candidate), _options);
+                    if (value is not null && (validator is null || validator(value))) return value;
+                }
                 catch { /* try the last known good copy */ }
             }
             return fallback;
@@ -46,19 +55,86 @@ public sealed class ConfigurationStore
 
     public void Save<T>(string fileName, T value)
     {
+        ValidateFileName(fileName);
         var path = Path.Combine(Paths.Config, fileName); var backup = Path.Combine(Paths.Backups, fileName + ".bak"); var temp = path + ".tmp";
         lock (_gate)
         {
             _faultInjector.ThrowIfRequested(FaultPoint.ConfigurationWrite);
             Paths.Ensure();
             var json = JsonSerializer.Serialize(value, _options);
+            if (Encoding.UTF8.GetByteCount(json) > MaxConfigurationBytes) throw new InvalidDataException("配置文件超过 10 MiB 安全上限。");
             File.WriteAllText(temp, json);
             using (var stream = new FileStream(temp, FileMode.Open, FileAccess.Read, FileShare.Read)) stream.Flush(true);
-            if (File.Exists(path)) File.Copy(path, backup, true);
+            RotateBackups(fileName, path, backup);
             File.Move(temp, path, true);
         }
     }
+
+    public IReadOnlyList<ConfigurationRecoveryPoint> ListRecoveryPoints(string fileName)
+    {
+        ValidateFileName(fileName);
+        lock (_gate)
+        {
+            var list = new List<ConfigurationRecoveryPoint>();
+            var primary = Path.Combine(Paths.Config, fileName);
+            if (File.Exists(primary)) list.Add(new(0, primary, File.GetLastWriteTimeUtc(primary), new FileInfo(primary).Length));
+            foreach (var candidate in RecoveryCandidates(fileName, primary, Path.Combine(Paths.Backups, fileName + ".bak")).Skip(1))
+                if (File.Exists(candidate)) list.Add(new(ExtractVersion(candidate, fileName), candidate, File.GetLastWriteTimeUtc(candidate), new FileInfo(candidate).Length));
+            return list.OrderBy(x => x.Version).ToArray();
+        }
+    }
+
+    public void Restore(string fileName, int version)
+    {
+        ValidateFileName(fileName);
+        if (version < 0 || version > MaxRecoveryVersions) throw new ArgumentOutOfRangeException(nameof(version));
+        var source = version == 0 ? Path.Combine(Paths.Config, fileName) : Path.Combine(Paths.Backups, fileName + ".bak" + (version == 1 ? string.Empty : "." + (version - 1)));
+        if (!File.Exists(source)) throw new FileNotFoundException("找不到指定的配置恢复点。", source);
+        var target = Path.Combine(Paths.Config, fileName);
+        lock (_gate)
+        {
+            if (new FileInfo(source).Length > MaxConfigurationBytes) throw new InvalidDataException("恢复点超过安全大小上限。");
+            using var document = JsonDocument.Parse(File.ReadAllText(source), new JsonDocumentOptions { MaxDepth = 32 });
+            var temp = target + ".restore.tmp";
+            File.Copy(source, temp, true);
+            File.Move(temp, target, true);
+        }
+    }
+
+    private IEnumerable<string> RecoveryCandidates(string fileName, string primary, string backup)
+    {
+        yield return primary;
+        yield return backup;
+        for (var i = 1; i < MaxRecoveryVersions; i++) yield return Path.Combine(Paths.Backups, fileName + ".bak." + i);
+    }
+
+    private void RotateBackups(string fileName, string path, string backup)
+    {
+        if (!File.Exists(path)) return;
+        for (var i = MaxRecoveryVersions - 1; i >= 1; i--)
+        {
+            var from = Path.Combine(Paths.Backups, fileName + ".bak." + (i - 1 == 0 ? string.Empty : (i - 1).ToString()));
+            var to = Path.Combine(Paths.Backups, fileName + ".bak." + i);
+            if (i == 1) from = backup;
+            if (File.Exists(from)) File.Copy(from, to, true);
+        }
+        File.Copy(path, backup, true);
+    }
+
+    private static int ExtractVersion(string path, string fileName)
+    {
+        var suffix = path[(Path.Combine(string.Empty, fileName + ".bak").Length)..].Trim('.');
+        return string.IsNullOrWhiteSpace(suffix) ? 1 : int.TryParse(suffix, out var value) ? value + 1 : 99;
+    }
+
+    private static void ValidateFileName(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName) || !string.Equals(Path.GetFileName(fileName), fileName, StringComparison.Ordinal) || fileName.Contains("..", StringComparison.Ordinal))
+            throw new ArgumentException("配置文件名必须是当前配置目录中的简单文件名。", nameof(fileName));
+    }
 }
+
+public sealed record ConfigurationRecoveryPoint(int Version, string Path, DateTime LastWriteTimeUtc, long SizeBytes);
 
 public static class WallpaperCacheKey
 {

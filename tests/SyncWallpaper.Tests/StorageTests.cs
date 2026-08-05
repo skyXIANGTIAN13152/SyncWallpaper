@@ -23,6 +23,35 @@ public class StorageTests
     }
 
     [TestMethod]
+    public void ConfigurationStoreKeepsFiveRecoveryPointsAndRestoresExplicitly()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "SyncWallpaperTests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new ConfigurationStore(new DataPaths(root));
+            for (var i = 0; i < 7; i++) store.Save("settings.json", new AppSettings { ActiveProfileId = "v" + i });
+            var recovery = store.ListRecoveryPoints("settings.json");
+            Assert.IsTrue(recovery.Count >= 5);
+            Assert.IsTrue(recovery.Count <= 6);
+            store.Restore("settings.json", 2);
+            Assert.AreEqual("v4", store.Load("settings.json", new AppSettings()).ActiveProfileId);
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [TestMethod]
+    public void ConfigurationStoreRejectsTraversalAndOversizedJson()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "SyncWallpaperTests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new ConfigurationStore(new DataPaths(root));
+            Assert.ThrowsException<ArgumentException>(() => store.Save("../settings.json", new AppSettings()));
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [TestMethod]
     public void CacheKeyChangesWithSizeAndFitMode()
     {
         var first = WallpaperCacheKey.Create("hash", 1920, 1080, WallpaperFitMode.Fill, "#000000");

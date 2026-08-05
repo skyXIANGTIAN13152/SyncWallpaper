@@ -92,4 +92,30 @@ public sealed class Rc1ReliabilityTests
         await completed.Task.WaitAsync(TimeSpan.FromSeconds(2));
         Assert.AreEqual("manual", appliedReasons.Single());
     }
+
+    [TestMethod]
+    public void SuspendResumeStateMachineRequiresStableTopologyBeforeActive()
+    {
+        var state = new SessionPowerStateMachine();
+        Assert.IsTrue(state.BeginSuspend());
+        Assert.IsTrue(state.MarkSuspended());
+        Assert.IsTrue(state.BeginResume());
+        Assert.IsTrue(state.ExplorerUnavailable());
+        Assert.IsTrue(state.TopologySampling());
+        Assert.IsTrue(state.TopologyStable());
+        Assert.AreEqual(SessionPowerState.Active, state.Current);
+    }
+
+    [TestMethod]
+    public void MixedDpiValidatorRejectsOverlapAndScalesCoordinates()
+    {
+        var result = MixedDpiLayoutValidator.Validate(new[]
+        {
+            new DpiLayoutDisplay("a", new Int32Rect(0, 0, 1920, 1080), 1.0, false),
+            new DpiLayoutDisplay("b", new Int32Rect(1900, 0, 1440, 2560), 1.5, true)
+        });
+        Assert.IsFalse(result.IsValid);
+        Assert.IsTrue(result.Errors.Any(x => x.Contains("重叠", StringComparison.Ordinal)));
+        Assert.AreEqual(1280, MixedDpiLayoutValidator.ScaleLogicalCoordinate(1920, 1.0, 1.5));
+    }
 }

@@ -11,6 +11,7 @@ public sealed class DisplayChangeCoordinator : IDisposable
     private readonly EventDebouncer _debouncer;
     private readonly DisplayTopologyStabilizer _stabilizer;
     private readonly TopologyCoordinator _topology;
+    private readonly SessionPowerStateMachine _powerState = new();
     private readonly NativeSystemMessageSource? _messageSource;
     private readonly Func<DisplaySnapshot, Task> _onStable;
     private readonly Action<string>? _onSystemEvent;
@@ -18,6 +19,7 @@ public sealed class DisplayChangeCoordinator : IDisposable
     private DisplaySnapshot? _stableSnapshot;
     public string LastSystemEvent { get; private set; } = "尚未收到系统事件";
     public long Generation => _topology.CurrentGeneration;
+    public SessionPowerState PowerState => _powerState.Current;
 
     public DisplayChangeCoordinator(MonitorDiscoveryService discovery, Func<DisplaySnapshot, Task> onStable, Action<string>? onSystemEvent = null)
     {
@@ -32,6 +34,7 @@ public sealed class DisplayChangeCoordinator : IDisposable
             {
                 token.ThrowIfCancellationRequested();
                 await _onStable(snapshot).ConfigureAwait(false);
+                _powerState.TopologyStable();
             });
         _stabilizer = new DisplayTopologyStabilizer(
             () => new DisplaySnapshot { Monitors = _discovery.Discover().ToList() },
@@ -63,8 +66,20 @@ public sealed class DisplayChangeCoordinator : IDisposable
     }
     public void Start() => Signal();
     private void OnSystemEvent(object? s, EventArgs e) { RecordEvent("DisplaySettingsChanged"); Signal(); }
-    private void OnPowerEvent(object? s, PowerModeChangedEventArgs e) { RecordEvent($"Power:{e.Mode}"); Signal(); }
-    private void OnSessionEvent(object? s, SessionSwitchEventArgs e) { RecordEvent($"Session:{e.Reason}"); Signal(); }
+    private void OnPowerEvent(object? s, PowerModeChangedEventArgs e)
+    {
+        if (e.Mode == PowerModes.Suspend) { _powerState.BeginSuspend(); _powerState.MarkSuspended(); }
+        else if (e.Mode == PowerModes.Resume) _powerState.BeginResume();
+        RecordEvent($"Power:{e.Mode}");
+        Signal();
+    }
+    private void OnSessionEvent(object? s, SessionSwitchEventArgs e)
+    {
+        if (e.Reason == SessionSwitchReason.SessionLock) _powerState.SessionUnavailable();
+        else if (e.Reason == SessionSwitchReason.SessionUnlock) _powerState.BeginResume();
+        RecordEvent($"Session:{e.Reason}");
+        Signal();
+    }
     private void RecordEvent(string value)
     {
         LastSystemEvent = $"{DateTime.Now:HH:mm:ss} {value}";

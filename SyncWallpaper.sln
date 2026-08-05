@@ -31,6 +31,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.IntegrationTe
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.Diagnostics", "src\SyncWallpaper.Diagnostics\SyncWallpaper.Diagnostics.csproj", "{1DA44584-8644-40D9-A70D-CC6F505107BC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.HardwareValidation", "src\SyncWallpaper.HardwareValidation\SyncWallpaper.HardwareValidation.csproj", "{2F78D022-52B3-49D6-9B79-4D775370D8C2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -88,6 +90,10 @@ Global
 		{1DA44584-8644-40D9-A70D-CC6F505107BC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1DA44584-8644-40D9-A70D-CC6F505107BC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1DA44584-8644-40D9-A70D-CC6F505107BC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2F78D022-52B3-49D6-9B79-4D775370D8C2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2F78D022-52B3-49D6-9B79-4D775370D8C2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2F78D022-52B3-49D6-9B79-4D775370D8C2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2F78D022-52B3-49D6-9B79-4D775370D8C2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{AC7E0375-3635-41A3-ABCA-144762DCC11F} = {FBC8428E-F6DD-4A47-B470-AB831AC3769E}
@@ -102,5 +108,6 @@ Global
 		{FB9110E9-24FB-42DA-BC9E-D847DB85B76D} = {2E051573-0DDF-4CF0-9703-F87481424296}
 		{F9DDF55B-D5C0-44A8-87E2-3E0F7D6A1F2E} = {2E051573-0DDF-4CF0-9703-F87481424296}
 		{1DA44584-8644-40D9-A70D-CC6F505107BC} = {FBC8428E-F6DD-4A47-B470-AB831AC3769E}
+		{2F78D022-52B3-49D6-9B79-4D775370D8C2} = {FBC8428E-F6DD-4A47-B470-AB831AC3769E}
 	EndGlobalSection
 EndGlobal
