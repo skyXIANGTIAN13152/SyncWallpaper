@@ -407,9 +407,17 @@ public sealed class AppRuntime : IDisposable
             r.Fingerprint.MonitorDevicePath.StartsWith(@"\\.\DISPLAY", StringComparison.OrdinalIgnoreCase) ||
             string.IsNullOrWhiteSpace(r.Fingerprint.StableId) ||
             string.Equals(r.Fingerprint.ManufacturerName, "UNKNOWN", StringComparison.OrdinalIgnoreCase)));
-        if (!needsInitialProfile) return;
         var monitors = _discovery.Discover().ToList();
         if (monitors.Count == 0) return;
+        if (!needsInitialProfile)
+        {
+            if (EnsureLaptopFallbackProfile(monitors))
+            {
+                Store.Save("profiles.json", Profiles);
+                _log.Info("Config", "已从现有 Laptop 角色建立单屏回退配置");
+            }
+            return;
+        }
         Profiles.Profiles.Clear();
         var profile = new WallpaperProfile
         {
@@ -439,9 +447,46 @@ public sealed class AppRuntime : IDisposable
             });
         }
         Profiles.Profiles.Add(profile);
+        EnsureLaptopFallbackProfile(monitors);
         Settings.ActiveProfileId = profile.Id;
         Store.Save("profiles.json", Profiles);
         Store.Save("settings.json", Settings);
+    }
+
+    private bool EnsureLaptopFallbackProfile(IReadOnlyList<MonitorIdentity> monitors)
+    {
+        if (Profiles.Profiles.Any(p => p.Enabled && p.ExpectedMonitorCount == 1 && p.Roles.Count == 1
+            && string.Equals(p.Roles[0].Role, "Laptop", StringComparison.OrdinalIgnoreCase))) return false;
+        var laptop = Profiles.Profiles.SelectMany(p => p.Roles)
+            .FirstOrDefault(r => string.Equals(r.Role, "Laptop", StringComparison.OrdinalIgnoreCase));
+        var internalMonitor = monitors.FirstOrDefault(m => m.IsInternal);
+        if (laptop is null || internalMonitor is null) return false;
+        var fingerprint = laptop.Fingerprint is { StableId: { Length: > 0 } } ? laptop.Fingerprint.Clone() : internalMonitor.Clone();
+        var binding = new MonitorRoleBinding
+        {
+            Role = "Laptop",
+            DisplayName = "笔记本本体",
+            Fingerprint = fingerprint,
+            WallpaperAssetId = laptop.WallpaperAssetId,
+            WallpaperPath = laptop.WallpaperPath,
+            FitMode = laptop.FitMode,
+            BackgroundColor = laptop.BackgroundColor,
+            AllowAutoRebind = laptop.AllowAutoRebind,
+            LastKnownMonitorDevicePath = laptop.LastKnownMonitorDevicePath,
+            Notes = "从现有多屏配置生成的单屏回退绑定"
+        };
+        Profiles.Profiles.Add(new WallpaperProfile
+        {
+            Name = "Laptop Only",
+            Combination = DisplayCombinationKind.LaptopOnly,
+            ExpectedMonitorCount = 1,
+            AutoApply = true,
+            AllowCompatibleMatch = true,
+            MinimumConfidence = Math.Min(laptop.Fingerprint.HasUsableSerial ? 90 : 80, 100),
+            Priority = Profiles.Profiles.Max(p => p.Priority) + 100,
+            Roles = new() { binding }
+        });
+        return true;
     }
 
     private async Task OnStableDisplaysAsync(DisplaySnapshot snapshot)
