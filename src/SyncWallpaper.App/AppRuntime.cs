@@ -30,6 +30,7 @@ public sealed class AppRuntime : IDisposable
     public IReadOnlyList<MonitorIdentity> Monitors { get; private set; } = Array.Empty<MonitorIdentity>();
     public MatchResult? LastMatch { get; private set; }
     public DisplayConfigurationApplyResult? LastDisplayTransaction { get; private set; }
+    public WallpaperTransactionStatus LastWallpaperTransaction => _apply.LastTransaction;
     public AudioConfigurationResult? LastAudioResult { get; private set; }
     public WindowRestoreResult? LastWindowRestore { get; private set; }
     public DesktopIconRestoreResult? LastDesktopRestore { get; private set; }
@@ -98,6 +99,13 @@ public sealed class AppRuntime : IDisposable
         }
         _library = new WallpaperLibraryService(Store);
         _apply = new WallpaperApplyService(new WallpaperRenderService(Paths), message => _log.Write("Wallpaper", message));
+        _apply.TransactionChanged += (_, status) =>
+        {
+            LastMessage = status.Message;
+            if (status.State is WallpaperTransactionState.Failed or WallpaperTransactionState.RollbackFailed)
+                _log.Warn("Wallpaper", status.Message);
+            RaiseChanged();
+        };
 
         _displayRepository = new DisplayProfileRepository(Store);
         DisplayConfigurations = new DisplayConfigurationDocument { Profiles = _displayRepository.List().ToList() };
@@ -451,10 +459,10 @@ public sealed class AppRuntime : IDisposable
     public async Task ReapplyAsync()
     {
         if (Monitors.Count == 0) Monitors = _discovery.Discover();
-        await MatchAndApplyAsync();
+        await MatchAndApplyAsync(manual: true);
     }
 
-    private async Task MatchAndApplyAsync()
+    private async Task MatchAndApplyAsync(bool manual = false)
     {
         if (Monitors.Count == 0) { StatusText = "未发现显示器"; LastMessage = "没有活动显示路径"; RaiseChanged(); return; }
         LastMatch = _matcher.Match(Monitors, Profiles.Profiles);
@@ -476,7 +484,7 @@ public sealed class AppRuntime : IDisposable
         }
         try
         {
-            var result = await RunOnDispatcherAsync(() => _apply.ApplyAsync(LastMatch, Library.Assets, Paths));
+            var result = await RunOnDispatcherAsync(() => _apply.ApplyAsync(LastMatch, Library.Assets, Paths, generation: _coordinator.Generation, manual: manual));
             LastMessage = result.Message; StatusText = result.Success ? "运行中" : "应用未完成";
             if (result.Success)
             {

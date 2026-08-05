@@ -10,29 +10,57 @@ public sealed class DisplayChangeCoordinator : IDisposable
     private readonly MonitorDiscoveryService _discovery;
     private readonly EventDebouncer _debouncer;
     private readonly DisplayTopologyStabilizer _stabilizer;
+    private readonly TopologyCoordinator _topology;
     private readonly NativeSystemMessageSource? _messageSource;
     private readonly Func<DisplaySnapshot, Task> _onStable;
     private readonly Action<string>? _onSystemEvent;
     private string _lastSignature = string.Empty;
+    private DisplaySnapshot? _stableSnapshot;
     public string LastSystemEvent { get; private set; } = "尚未收到系统事件";
+    public long Generation => _topology.CurrentGeneration;
 
     public DisplayChangeCoordinator(MonitorDiscoveryService discovery, Func<DisplaySnapshot, Task> onStable, Action<string>? onSystemEvent = null)
     {
         _discovery = discovery; _onStable = onStable; _onSystemEvent = onSystemEvent;
+        _topology = new TopologyCoordinator(
+            (_, _) =>
+            {
+                var snapshot = Interlocked.Exchange(ref _stableSnapshot, null) ?? new DisplaySnapshot { Monitors = _discovery.Discover().ToList() };
+                return Task.FromResult((snapshot, true));
+            },
+            async (_, snapshot, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                await _onStable(snapshot).ConfigureAwait(false);
+            });
         _stabilizer = new DisplayTopologyStabilizer(
             () => new DisplaySnapshot { Monitors = _discovery.Discover().ToList() },
-            async (snapshot, token) =>
+            (snapshot, token) =>
             {
-                if (!token.IsCancellationRequested) await _onStable(snapshot);
+                if (!token.IsCancellationRequested)
+                {
+                    Interlocked.Exchange(ref _stableSnapshot, snapshot);
+                    _topology.Signal(TopologySignalKind.Display, "stable-display-topology");
+                }
+                return Task.CompletedTask;
             });
         _debouncer = new EventDebouncer(TimeSpan.FromMilliseconds(250), _ => { _stabilizer.Signal(); return Task.CompletedTask; });
         SystemEvents.DisplaySettingsChanged += OnSystemEvent;
         SystemEvents.PowerModeChanged += OnPowerEvent;
         SystemEvents.SessionSwitch += OnSessionEvent;
-        try { _messageSource = new NativeSystemMessageSource(RecordNativeEvent, Signal); }
+        try { _messageSource = new NativeSystemMessageSource(RecordNativeEvent, () => Signal()); }
         catch (Exception ex) { _onSystemEvent?.Invoke($"NativeMessageSourceUnavailable:{ex.Message}"); }
     }
-    public void Signal() => _debouncer.Signal();
+    public void Signal(bool manual = false)
+    {
+        if (manual)
+        {
+            Interlocked.Exchange(ref _stableSnapshot, new DisplaySnapshot { Monitors = _discovery.Discover().ToList() });
+            _topology.Signal(TopologySignalKind.Manual, "manual-display-refresh", manual: true);
+            return;
+        }
+        _debouncer.Signal();
+    }
     public void Start() => Signal();
     private void OnSystemEvent(object? s, EventArgs e) { RecordEvent("DisplaySettingsChanged"); Signal(); }
     private void OnPowerEvent(object? s, PowerModeChangedEventArgs e) { RecordEvent($"Power:{e.Mode}"); Signal(); }
@@ -43,7 +71,16 @@ public sealed class DisplayChangeCoordinator : IDisposable
         _onSystemEvent?.Invoke(value);
     }
     private void RecordNativeEvent(string value) => RecordEvent(value);
-    public void Dispose() { SystemEvents.DisplaySettingsChanged -= OnSystemEvent; SystemEvents.PowerModeChanged -= OnPowerEvent; SystemEvents.SessionSwitch -= OnSessionEvent; _messageSource?.Dispose(); _debouncer.Dispose(); _stabilizer.Dispose(); }
+    public void Dispose()
+    {
+        SystemEvents.DisplaySettingsChanged -= OnSystemEvent;
+        SystemEvents.PowerModeChanged -= OnPowerEvent;
+        SystemEvents.SessionSwitch -= OnSessionEvent;
+        _messageSource?.Dispose();
+        _debouncer.Dispose();
+        _stabilizer.Dispose();
+        try { _topology.DisposeAsync().AsTask().GetAwaiter().GetResult(); } catch { }
+    }
 }
 
 /// <summary>Small message-only WPF window for event-driven topology signals.</summary>

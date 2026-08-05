@@ -9,6 +9,7 @@ TestResults/
 
 # Generated packages, diagnostics, soak reports and scratch data
 artifacts/
+artifacts/validation-snapshots/*
 outputs/
 work/
 *.log
