@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SyncWallpaper.Core\SyncWallpaper.Core.csproj" />
+    <ProjectReference Include="..\..\src\SyncWallpaper.DisplayEngine\SyncWallpaper.DisplayEngine.csproj" />
+    <ProjectReference Include="..\..\src\SyncWallpaper.Windows\SyncWallpaper.Windows.csproj" />
+    <ProjectReference Include="..\..\src\SyncWallpaper.AudioEngine\SyncWallpaper.AudioEngine.csproj" />
+    <ProjectReference Include="..\..\src\SyncWallpaper.DesktopEngine\SyncWallpaper.DesktopEngine.csproj" />
+    <ProjectReference Include="..\..\src\SyncWallpaper.WindowEngine\SyncWallpaper.WindowEngine.csproj" />
+    <ProjectReference Include="..\..\src\SyncWallpaper.App\SyncWallpaper.App.csproj" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="MSTest.TestAdapter" Version="3.1.1" />
+    <PackageReference Include="MSTest.TestFramework" Version="3.1.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+  </ItemGroup>
+</Project>

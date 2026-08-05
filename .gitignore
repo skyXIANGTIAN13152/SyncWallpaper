@@ -1,0 +1,28 @@
+# Build and IDE output
+**/bin/
+**/obj/
+.vs/
+.idea/
+TestResults/
+*.user
+*.suo
+
+# Generated packages, diagnostics, soak reports and scratch data
+artifacts/
+outputs/
+work/
+*.log
+*.tmp
+*.bak
+
+# Local application data accidentally copied into the workspace
+Config/
+Logs/
+Wallpapers/
+Thumbnails/
+Cache/
+Backups/
+Deleted/
+
+# Reference repositories are kept outside the product history.
+vendor/

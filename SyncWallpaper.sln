@@ -1,0 +1,106 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{FBC8428E-F6DD-4A47-B470-AB831AC3769E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.Core", "src\SyncWallpaper.Core\SyncWallpaper.Core.csproj", "{AC7E0375-3635-41A3-ABCA-144762DCC11F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.DisplayEngine", "src\SyncWallpaper.DisplayEngine\SyncWallpaper.DisplayEngine.csproj", "{1C20B6A9-64F0-4FC5-A3F6-2BB6E4D6CFE5}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.AudioEngine", "src\SyncWallpaper.AudioEngine\SyncWallpaper.AudioEngine.csproj", "{BEF8AF3A-6C72-45B2-A5C2-1EE1BFDF6A4A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.WindowEngine", "src\SyncWallpaper.WindowEngine\SyncWallpaper.WindowEngine.csproj", "{C86F8C7C-3D5B-4D43-ABEA-38B8A4F6D5A2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.Automation", "src\SyncWallpaper.Automation\SyncWallpaper.Automation.csproj", "{F2E4D311-5442-4D2B-A5F7-7F1FA3F58E4A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.DesktopEngine", "src\SyncWallpaper.DesktopEngine\SyncWallpaper.DesktopEngine.csproj", "{5E4AB8E9-CB20-4D65-8C19-D0CBA55F6D7A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.Windows", "src\SyncWallpaper.Windows\SyncWallpaper.Windows.csproj", "{BD7C80DC-BD0E-48FD-A122-C90C230073BA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.App", "src\SyncWallpaper.App\SyncWallpaper.App.csproj", "{F56392C7-5690-4DBD-8FFA-E6F8643842EF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.Host", "src\SyncWallpaper.Host\SyncWallpaper.Host.csproj", "{A28A7D2D-3F76-4C4F-9E53-EC5D7DC46A93}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{2E051573-0DDF-4CF0-9703-F87481424296}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.Tests", "tests\SyncWallpaper.Tests\SyncWallpaper.Tests.csproj", "{FB9110E9-24FB-42DA-BC9E-D847DB85B76D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.IntegrationTests", "tests\SyncWallpaper.IntegrationTests\SyncWallpaper.IntegrationTests.csproj", "{F9DDF55B-D5C0-44A8-87E2-3E0F7D6A1F2E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.Diagnostics", "src\SyncWallpaper.Diagnostics\SyncWallpaper.Diagnostics.csproj", "{1DA44584-8644-40D9-A70D-CC6F505107BC}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{AC7E0375-3635-41A3-ABCA-144762DCC11F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AC7E0375-3635-41A3-ABCA-144762DCC11F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AC7E0375-3635-41A3-ABCA-144762DCC11F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AC7E0375-3635-41A3-ABCA-144762DCC11F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1C20B6A9-64F0-4FC5-A3F6-2BB6E4D6CFE5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1C20B6A9-64F0-4FC5-A3F6-2BB6E4D6CFE5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1C20B6A9-64F0-4FC5-A3F6-2BB6E4D6CFE5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1C20B6A9-64F0-4FC5-A3F6-2BB6E4D6CFE5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BEF8AF3A-6C72-45B2-A5C2-1EE1BFDF6A4A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BEF8AF3A-6C72-45B2-A5C2-1EE1BFDF6A4A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BEF8AF3A-6C72-45B2-A5C2-1EE1BFDF6A4A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BEF8AF3A-6C72-45B2-A5C2-1EE1BFDF6A4A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C86F8C7C-3D5B-4D43-ABEA-38B8A4F6D5A2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C86F8C7C-3D5B-4D43-ABEA-38B8A4F6D5A2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C86F8C7C-3D5B-4D43-ABEA-38B8A4F6D5A2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C86F8C7C-3D5B-4D43-ABEA-38B8A4F6D5A2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F2E4D311-5442-4D2B-A5F7-7F1FA3F58E4A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F2E4D311-5442-4D2B-A5F7-7F1FA3F58E4A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F2E4D311-5442-4D2B-A5F7-7F1FA3F58E4A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F2E4D311-5442-4D2B-A5F7-7F1FA3F58E4A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5E4AB8E9-CB20-4D65-8C19-D0CBA55F6D7A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5E4AB8E9-CB20-4D65-8C19-D0CBA55F6D7A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5E4AB8E9-CB20-4D65-8C19-D0CBA55F6D7A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5E4AB8E9-CB20-4D65-8C19-D0CBA55F6D7A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BD7C80DC-BD0E-48FD-A122-C90C230073BA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BD7C80DC-BD0E-48FD-A122-C90C230073BA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BD7C80DC-BD0E-48FD-A122-C90C230073BA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BD7C80DC-BD0E-48FD-A122-C90C230073BA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F56392C7-5690-4DBD-8FFA-E6F8643842EF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F56392C7-5690-4DBD-8FFA-E6F8643842EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F56392C7-5690-4DBD-8FFA-E6F8643842EF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F56392C7-5690-4DBD-8FFA-E6F8643842EF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A28A7D2D-3F76-4C4F-9E53-EC5D7DC46A93}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A28A7D2D-3F76-4C4F-9E53-EC5D7DC46A93}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A28A7D2D-3F76-4C4F-9E53-EC5D7DC46A93}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A28A7D2D-3F76-4C4F-9E53-EC5D7DC46A93}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FB9110E9-24FB-42DA-BC9E-D847DB85B76D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FB9110E9-24FB-42DA-BC9E-D847DB85B76D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FB9110E9-24FB-42DA-BC9E-D847DB85B76D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FB9110E9-24FB-42DA-BC9E-D847DB85B76D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F9DDF55B-D5C0-44A8-87E2-3E0F7D6A1F2E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F9DDF55B-D5C0-44A8-87E2-3E0F7D6A1F2E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F9DDF55B-D5C0-44A8-87E2-3E0F7D6A1F2E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F9DDF55B-D5C0-44A8-87E2-3E0F7D6A1F2E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1DA44584-8644-40D9-A70D-CC6F505107BC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1DA44584-8644-40D9-A70D-CC6F505107BC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1DA44584-8644-40D9-A70D-CC6F505107BC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1DA44584-8644-40D9-A70D-CC6F505107BC}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{AC7E0375-3635-41A3-ABCA-144762DCC11F} = {FBC8428E-F6DD-4A47-B470-AB831AC3769E}
+		{1C20B6A9-64F0-4FC5-A3F6-2BB6E4D6CFE5} = {FBC8428E-F6DD-4A47-B470-AB831AC3769E}
+		{BEF8AF3A-6C72-45B2-A5C2-1EE1BFDF6A4A} = {FBC8428E-F6DD-4A47-B470-AB831AC3769E}
+		{C86F8C7C-3D5B-4D43-ABEA-38B8A4F6D5A2} = {FBC8428E-F6DD-4A47-B470-AB831AC3769E}
+		{F2E4D311-5442-4D2B-A5F7-7F1FA3F58E4A} = {FBC8428E-F6DD-4A47-B470-AB831AC3769E}
+		{5E4AB8E9-CB20-4D65-8C19-D0CBA55F6D7A} = {FBC8428E-F6DD-4A47-B470-AB831AC3769E}
+		{BD7C80DC-BD0E-48FD-A122-C90C230073BA} = {FBC8428E-F6DD-4A47-B470-AB831AC3769E}
+		{F56392C7-5690-4DBD-8FFA-E6F8643842EF} = {FBC8428E-F6DD-4A47-B470-AB831AC3769E}
+		{A28A7D2D-3F76-4C4F-9E53-EC5D7DC46A93} = {FBC8428E-F6DD-4A47-B470-AB831AC3769E}
+		{FB9110E9-24FB-42DA-BC9E-D847DB85B76D} = {2E051573-0DDF-4CF0-9703-F87481424296}
+		{F9DDF55B-D5C0-44A8-87E2-3E0F7D6A1F2E} = {2E051573-0DDF-4CF0-9703-F87481424296}
+		{1DA44584-8644-40D9-A70D-CC6F505107BC} = {FBC8428E-F6DD-4A47-B470-AB831AC3769E}
+	EndGlobalSection
+EndGlobal

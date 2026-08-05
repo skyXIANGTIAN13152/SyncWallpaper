@@ -1,0 +1,29 @@
+<Application x:Class="SyncWallpaper.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <SolidColorBrush x:Key="AppBackground" Color="#070D1B"/>
+        <SolidColorBrush x:Key="PanelBackground" Color="#0D1728"/>
+        <SolidColorBrush x:Key="PanelBackground2" Color="#101E32"/>
+        <SolidColorBrush x:Key="Cyan" Color="#36E8FF"/>
+        <SolidColorBrush x:Key="Blue" Color="#4D8CFF"/>
+        <SolidColorBrush x:Key="Purple" Color="#A66CFF"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#E7F7FF"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#88A6BD"/>
+        <SolidColorBrush x:Key="Border" Color="#244B69"/>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI"/>
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Background" Value="#14283E"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="14,8"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+    </Application.Resources>
+</Application>
