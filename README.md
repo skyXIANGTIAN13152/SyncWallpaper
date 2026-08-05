@@ -1,6 +1,6 @@
 # 屏序 SyncWallpaper
 
-一个原生 .NET 8 / WPF 的 Windows 壁纸恢复工具（Beta 1.0.0）：依据当前活动显示路径与稳定硬件指纹，识别显示器组合，为逻辑角色恢复对应壁纸。
+一个原生 .NET 8 / WPF 的 Windows 壁纸恢复工具（Release Candidate 1.0.0-rc.1）：依据当前活动显示路径与稳定硬件指纹，识别显示器组合，为逻辑角色恢复对应壁纸。
 
 ## 已实现
 
@@ -66,6 +66,10 @@
     artifacts\publish\win-x64\Diagnostics\SyncWallpaper.Diagnostics.exe
 
 `publish.ps1` 生成 framework-dependent Beta 包；`publish-selfcontained.ps1` 生成可选 self-contained 包。发布目录同时带有 AppIcon.ico、SVG、许可证、变更记录、第三方声明和 docs，不包含测试数据、密钥或开发机绝对路径。
+
+## RC1 验收、安装与恢复
+
+发布包包含 SyncWallpaper.HardwareValidation.exe，提供 21 步只读验收向导、脱敏身份诊断、快照比较和人工确认门禁；另外提供 framework-dependent、自包含、portable ZIP、SHA256 和当前用户安装/升级/卸载脚本。参见 docs/RC1ReleaseCandidateReport.md、docs/HARDWARE-VALIDATION.md、docs/INSTALLATION.md、docs/UPGRADE.md、docs/UNINSTALL.md、docs/SECURITY.md 和 docs/TROUBLESHOOTING.md。
 
 ## 数据目录
 

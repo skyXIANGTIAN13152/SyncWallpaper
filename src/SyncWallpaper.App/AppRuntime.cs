@@ -47,6 +47,8 @@ public sealed class AppRuntime : IDisposable
     private readonly WallpaperLibraryService _library;
     private readonly WallpaperApplyService _apply;
     private readonly DisplayChangeCoordinator _coordinator;
+    private readonly ExplorerRecoveryCoordinator _explorerRecovery;
+    private readonly SafeModePolicy _safeMode = new();
     private readonly StartupService _startup = new();
     private readonly MonitorConfigurationService _monitorConfiguration = new();
     private readonly DisplayProfileRepository _displayRepository;
@@ -90,6 +92,7 @@ public sealed class AppRuntime : IDisposable
         ModulePerformance = Store.Load("module-performance.json", new ModulePerformanceDocument());
         ModuleRuntime = Store.Load("module-runtime.json", new ModuleRuntimeDocument());
         Settings.Modules ??= new ModuleConfiguration();
+        if (Settings.SafeMode) { Settings.AutoMatchEnabled = false; StatusText = "安全模式"; LastMessage = Settings.SafeModeReason; }
 
         _log = new LogService(Paths);
         if (loadedProfilesSchema < ProfileSchemaMigrator.CurrentSchemaVersion)
@@ -99,17 +102,33 @@ public sealed class AppRuntime : IDisposable
         }
         _library = new WallpaperLibraryService(Store);
         _apply = new WallpaperApplyService(new WallpaperRenderService(Paths), message => _log.Write("Wallpaper", message));
+        _explorerRecovery = new ExplorerRecoveryCoordinator(
+            async token => { if (token.IsCancellationRequested) return; await MatchAndApplyAsync(); },
+            message => _log.Warn("ExplorerRecovery", message));
+        _apply.ExplorerUnavailable += message => _explorerRecovery.NotifyUnavailable(message);
         _apply.TransactionChanged += (_, status) =>
         {
             LastMessage = status.Message;
             if (status.State is WallpaperTransactionState.Failed or WallpaperTransactionState.RollbackFailed)
                 _log.Warn("Wallpaper", status.Message);
+            if (status.State == WallpaperTransactionState.RollbackFailed)
+            {
+                _safeMode.Record(SafeModeTrigger.WallpaperRollbackFailure, status.Message);
+                Settings.SafeMode = true;
+                Settings.SafeModeReason = status.Message;
+                Settings.AutoMatchEnabled = false;
+                try { Store.Save("settings.json", Settings); } catch { }
+            }
             RaiseChanged();
         };
 
         _displayRepository = new DisplayProfileRepository(Store);
         DisplayConfigurations = new DisplayConfigurationDocument { Profiles = _displayRepository.List().ToList() };
-        _coordinator = new DisplayChangeCoordinator(_discovery, OnStableDisplaysAsync, value => _log.Info("SystemEvent", value));
+        _coordinator = new DisplayChangeCoordinator(_discovery, OnStableDisplaysAsync, value =>
+        {
+            _log.Info("SystemEvent", value);
+            _explorerRecovery.NotifyShellEvent(value);
+        });
         Modules = new ModuleManager(message => _log.Info("Module", message), runtime: ModuleRuntime,
             persist: document => Store.Save("module-runtime.json", document));
         RegisterModules();
@@ -886,6 +905,7 @@ public sealed class AppRuntime : IDisposable
     public void Dispose()
     {
         _coordinator.Dispose();
+        _explorerRecovery.Dispose();
         Modules.StateChanged -= Modules_StateChanged;
         Modules.Dispose();
         Store.Save("settings.json", Settings);

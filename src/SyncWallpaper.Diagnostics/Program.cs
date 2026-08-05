@@ -25,6 +25,8 @@ internal static class Program
                 "soak" => await SoakAsync(args),
                 "verify" => await VerifyAsync(args),
                 "sim-soak" => await SimulationSoakAsync(args),
+                "accelerated" => await SimulationSoakAsync(args),
+                "realtime-soak" => await SoakAsync(args),
                 "manual" => await ManualWizardAsync(args),
                 _ => Help()
             };
@@ -48,6 +50,8 @@ internal static class Program
         Console.WriteLine("  soak --duration-minutes 60       安全宿主/资源长时间采样");
         Console.WriteLine("  verify [--interactive]           安全验证清单；危险项默认不执行");
         Console.WriteLine("  sim-soak --events 10000           虚拟拓扑事件压力测试（不改动系统）");
+        Console.WriteLine("  accelerated --events 100000       加速 100,000 事件测试（不改动系统）");
+        Console.WriteLine("  realtime-soak --duration-minutes 60 真实时间资源采样；少于 12 小时明确标记未达标");
         Console.WriteLine("  manual                             逐步人工验证向导（不会自动执行危险动作）");
         return 0;
     }
@@ -130,9 +134,38 @@ internal static class Program
         using var host = await DiagnosticsHostSession.StartAsync(cancel.Token);
         var samples = new List<SoakSample>();
         var started = DateTime.UtcNow;
-        Console.WriteLine($"安全压测开始：{started:O}，计划时长={duration.TotalMinutes:0.#} 分钟，间隔={intervalSeconds} 秒，宿主 PID={host.ProcessId?.ToString() ?? "无"}");
-        while (!cancel.IsCancellationRequested && DateTime.UtcNow - started < duration)
+        var stopwatch = Stopwatch.StartNew();
+        var powerGate = new object();
+        DateTime? suspendedAt = null;
+        var sleepSeconds = 0d;
+        void OnPowerChanged(object? _, Microsoft.Win32.PowerModeChangedEventArgs e)
         {
+            lock (powerGate)
+            {
+                if (e.Mode == Microsoft.Win32.PowerModes.Suspend && suspendedAt is null) suspendedAt = DateTime.UtcNow;
+                if (e.Mode == Microsoft.Win32.PowerModes.Resume && suspendedAt is not null)
+                {
+                    sleepSeconds += (DateTime.UtcNow - suspendedAt.Value).TotalSeconds;
+                    suspendedAt = null;
+                }
+            }
+        }
+        Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerChanged;
+        var nextRefreshSeconds = Random.Shared.Next(300, 1201);
+        Console.WriteLine($"安全压测开始：{started:O}，计划时长={duration.TotalMinutes:0.#} 分钟，间隔={intervalSeconds} 秒，宿主 PID={host.ProcessId?.ToString() ?? "无"}");
+        while (!cancel.IsCancellationRequested && ActiveSeconds(stopwatch, powerGate, suspendedAt, sleepSeconds) < duration.TotalSeconds)
+        {
+            if (IsSuspended(powerGate, suspendedAt))
+            {
+                try { await Task.Delay(TimeSpan.FromSeconds(1), cancel.Token); } catch (OperationCanceledException) { break; }
+                continue;
+            }
+            var active = ActiveSeconds(stopwatch, powerGate, suspendedAt, sleepSeconds);
+            if (active >= nextRefreshSeconds)
+            {
+                _ = new MonitorDiscoveryService().Discover();
+                nextRefreshSeconds += Random.Shared.Next(300, 1201);
+            }
             samples.Add(CaptureSoakSample(host.ProcessId, started, host.State, host.LastError));
             try { await Task.Delay(TimeSpan.FromSeconds(intervalSeconds), cancel.Token); }
             catch (OperationCanceledException) { break; }
@@ -141,10 +174,15 @@ internal static class Program
         var cancelled = cancel.IsCancellationRequested;
         await host.StopAsync(CancellationToken.None);
         var ended = DateTime.UtcNow;
-        var report = BuildSoakReport(started, ended, duration, intervalSeconds, samples, host.LastError, cancelled);
+        lock (powerGate)
+        {
+            if (suspendedAt is not null) { sleepSeconds += (DateTime.UtcNow - suspendedAt.Value).TotalSeconds; suspendedAt = null; }
+        }
+        Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerChanged;
+        var report = BuildSoakReport(started, ended, duration, intervalSeconds, samples, host.LastError, cancelled, Math.Max(0, stopwatch.Elapsed.TotalSeconds - sleepSeconds), sleepSeconds);
         await File.WriteAllTextAsync(output, JsonSerializer.Serialize(report, JsonOptions));
         await File.WriteAllTextAsync(Path.ChangeExtension(output, ".csv"), ToCsv(samples));
-        Console.WriteLine($"安全压测结束：实际时长={report.ActualDurationSeconds:0.0} 秒，样本={samples.Count}，状态={(cancelled ? "Cancelled" : "Completed")}，报告={output}");
+        Console.WriteLine($"安全压测结束：实际时长={report.ActualDurationSeconds:0.0} 秒，样本={samples.Count}，状态={(cancelled ? "Cancelled" : "Completed")}，12小时合格={(report.Qualified12Hour ? "是" : "否")}，报告={output}");
         Console.WriteLine($"WorkingSet min/avg/max={report.WorkingSet.Min:N0}/{report.WorkingSet.Average:N0}/{report.WorkingSet.Max:N0} bytes；Handle min/avg/max={report.Handles.Min:N0}/{report.Handles.Average:N0}/{report.Handles.Max:N0}");
         return 0;
     }
@@ -257,7 +295,21 @@ internal static class Program
         catch { return null; }
     }
 
-    private static SoakReport BuildSoakReport(DateTime started, DateTime ended, TimeSpan planned, int interval, List<SoakSample> samples, string? error, bool cancelled)
+    private static double ActiveSeconds(Stopwatch stopwatch, object gate, DateTime? suspendedAt, double sleepSeconds)
+    {
+        lock (gate)
+        {
+            var currentSleep = suspendedAt is null ? 0 : (DateTime.UtcNow - suspendedAt.Value).TotalSeconds;
+            return Math.Max(0, stopwatch.Elapsed.TotalSeconds - sleepSeconds - currentSleep);
+        }
+    }
+
+    private static bool IsSuspended(object gate, DateTime? suspendedAt)
+    {
+        lock (gate) return suspendedAt is not null;
+    }
+
+    private static SoakReport BuildSoakReport(DateTime started, DateTime ended, TimeSpan planned, int interval, List<SoakSample> samples, string? error, bool cancelled, double monotonicActiveSeconds, double sleepSeconds)
     {
         var working = samples.Select(x => x.SelfWorkingSetBytes).ToArray();
         var handles = samples.Select(x => x.SelfHandleCount).ToArray();
@@ -269,8 +321,8 @@ internal static class Program
         var hostPrivate = samples.Select(x => x.HostPrivateBytes).ToArray();
         var hostHandles = samples.Select(x => x.HostHandleCount).ToArray();
         var hostCpu = samples.Select(x => x.HostCpuSeconds).ToArray();
-        var durationHours = Math.Max((ended - started).TotalHours, 1d / 3600d);
-        var durationMinutes = Math.Max((ended - started).TotalMinutes, 1d / 60d);
+        var durationHours = Math.Max(monotonicActiveSeconds / 3600d, 1d / 3600d);
+        var durationMinutes = Math.Max(monotonicActiveSeconds / 60d, 1d / 60d);
         var trend = new SoakTrend(
             Delta(working), Delta(working) / durationHours,
             Delta(privateBytes), Delta(privateBytes) / durationHours,
@@ -291,8 +343,8 @@ internal static class Program
             || trend.CpuSecondsPerMinute > thresholds.CpuSecondsPerMinute
             || trend.GdiDeltaPerHour > thresholds.GdiGrowthPerHour
             || trend.UserDeltaPerHour > thresholds.UserGrowthPerHour;
-        return new SoakReport(started, ended, (ended - started).TotalSeconds, planned.TotalSeconds, interval,
-            samples.Count, cancelled, error, Summary(working), Summary(privateBytes), Summary(handles), Summary(cpu),
+        return new SoakReport(started, ended, (ended - started).TotalSeconds, monotonicActiveSeconds, sleepSeconds, planned.TotalSeconds, interval,
+            samples.Count, cancelled, monotonicActiveSeconds >= 12 * 3600, error, Summary(working), Summary(privateBytes), Summary(handles), Summary(cpu),
             Summary(gdi), Summary(user), Summary(hostWorking), Summary(hostPrivate), Summary(hostHandles), Summary(hostCpu),
             trend, thresholds, thresholdExceeded, samples);
     }
@@ -415,7 +467,10 @@ internal static class Program
     private sealed record MetricSummary(double Min, double Average, double Max, double Start, double End);
     private sealed record SoakTrend(double WorkingSetDeltaBytes, double WorkingSetDeltaPerHourBytes, double PrivateBytesDeltaBytes, double PrivateBytesDeltaPerHourBytes, double HandleDelta, double HandleDeltaPerHour, double CpuSecondsDelta, double CpuSecondsPerMinute, double GdiDelta, double GdiDeltaPerHour, double UserDelta, double UserDeltaPerHour);
     private sealed record SoakThresholds(long WorkingSetGrowthPerHourBytes, long PrivateBytesGrowthPerHourBytes, double HandleGrowthPerHour, double CpuSecondsPerMinute, double GdiGrowthPerHour, double UserGrowthPerHour);
-    private sealed record SoakReport(DateTime StartedUtc, DateTime EndedUtc, double ActualDurationSeconds, double PlannedDurationSeconds, int IntervalSeconds, int SampleCount, bool Cancelled, string? HostError, MetricSummary WorkingSet, MetricSummary PrivateBytes, MetricSummary Handles, MetricSummary CpuSeconds, MetricSummary GdiObjects, MetricSummary UserObjects, MetricSummary HostWorkingSet, MetricSummary HostPrivateBytes, MetricSummary HostHandles, MetricSummary HostCpuSeconds, SoakTrend Trend, SoakThresholds Thresholds, bool ThresholdExceeded, IReadOnlyList<SoakSample> Samples);
+    private sealed record SoakReport(DateTime StartedUtc, DateTime EndedUtc, double ActualWallDurationSeconds, double MonotonicActiveDurationSeconds, double SleepSecondsExcluded, double PlannedDurationSeconds, int IntervalSeconds, int SampleCount, bool Cancelled, bool Qualified12Hour, string? HostError, MetricSummary WorkingSet, MetricSummary PrivateBytes, MetricSummary Handles, MetricSummary CpuSeconds, MetricSummary GdiObjects, MetricSummary UserObjects, MetricSummary HostWorkingSet, MetricSummary HostPrivateBytes, MetricSummary HostHandles, MetricSummary HostCpuSeconds, SoakTrend Trend, SoakThresholds Thresholds, bool ThresholdExceeded, IReadOnlyList<SoakSample> Samples)
+    {
+        public double ActualDurationSeconds => MonotonicActiveDurationSeconds;
+    }
     private sealed record VerifyResult(string Name, string Status, string Message);
     private sealed record VerifyReport(DateTime TimestampUtc, string OsVersion, string SnapshotPath, string RiskStatement, IReadOnlyList<VerifyResult> Results);
 

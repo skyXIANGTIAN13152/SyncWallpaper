@@ -118,4 +118,37 @@ public sealed class Rc1ReliabilityTests
         Assert.IsTrue(result.Errors.Any(x => x.Contains("重叠", StringComparison.Ordinal)));
         Assert.AreEqual(1280, MixedDpiLayoutValidator.ScaleLogicalCoordinate(1920, 1.0, 1.5));
     }
+
+    [TestMethod]
+    public void ExplorerBackoffIsBoundedAndResetsAfterSuccess()
+    {
+        var backoff = new ExplorerRecoveryBackoff(TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(40));
+        backoff.RecordFailure();
+        backoff.RecordFailure();
+        Assert.IsTrue(backoff.NextDelay <= TimeSpan.FromMilliseconds(40));
+        Assert.AreEqual(2, backoff.ConsecutiveFailures);
+        backoff.RecordSuccess();
+        Assert.AreEqual(0, backoff.ConsecutiveFailures);
+    }
+
+    [TestMethod]
+    public void SafeModeNeedsThreeStartupFailuresAndExplicitExit()
+    {
+        var policy = new SafeModePolicy(3);
+        Assert.IsFalse(policy.Record(SafeModeTrigger.StartupCrash, "one"));
+        Assert.IsFalse(policy.Record(SafeModeTrigger.StartupCrash, "two"));
+        Assert.IsTrue(policy.Record(SafeModeTrigger.StartupCrash, "three"));
+        Assert.IsTrue(policy.Enabled);
+        Assert.IsFalse(policy.TryLeave("NO"));
+        Assert.IsTrue(policy.TryLeave("YES"));
+        Assert.IsFalse(policy.Enabled);
+    }
+
+    [TestMethod]
+    public void SafeModeTriggersImmediatelyForRollbackFailure()
+    {
+        var policy = new SafeModePolicy();
+        Assert.IsTrue(policy.Record(SafeModeTrigger.WallpaperRollbackFailure, "rollback"));
+        Assert.AreEqual("rollback", policy.Reason);
+    }
 }

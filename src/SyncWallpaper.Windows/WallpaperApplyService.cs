@@ -14,6 +14,7 @@ public sealed class WallpaperApplyService
     public WallpaperApplyService(WallpaperRenderService renderer, Action<string>? log = null) { _renderer = renderer; _log = log ?? (_ => { }); }
     public WallpaperTransactionStatus LastTransaction => _lastTransaction;
     public event EventHandler<WallpaperTransactionStatus>? TransactionChanged;
+    public event Action<string>? ExplorerUnavailable;
 
     public async Task<ApplyResult> ApplyAsync(MatchResult match, IReadOnlyList<WallpaperAsset> assets, DataPaths paths, CancellationToken cancellationToken = default, long generation = 0, bool manual = false)
     {
@@ -128,6 +129,7 @@ public sealed class WallpaperApplyService
         catch (COMException ex)
         {
             _log($"壁纸 COM 接口不可用：{ex.Message}");
+            try { ExplorerUnavailable?.Invoke(ex.Message); } catch { }
             state.TryTransition(WallpaperTransactionState.Failed);
             PublishTransaction(generation, state.Current, started, DateTime.UtcNow, applied, expected, retries, rollbackSucceeded, "Explorer 壁纸接口暂不可用，保留当前壁纸");
             return new ApplyResult(false, "Explorer 壁纸接口暂不可用，保留当前壁纸", applied);

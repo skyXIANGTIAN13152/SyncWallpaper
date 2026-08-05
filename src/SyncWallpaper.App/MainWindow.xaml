@@ -99,9 +99,10 @@
                         <Border Style="{StaticResource Card}" Background="{StaticResource CosmicPanel}" Padding="20">
                             <Grid>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                                <StackPanel Orientation="Horizontal">
+                                    <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="显示器布局" FontSize="17" FontWeight="SemiBold"/>
                                     <TextBlock x:Name="LastMessage" Text="等待检测" Foreground="{StaticResource TextSecondary}" Margin="16,3,0,0"/>
+                                    <TextBlock x:Name="WallpaperTransactionText" Text="壁纸事务：尚未执行" Foreground="{StaticResource TextSecondary}" Margin="16,3,0,0" TextTrimming="CharacterEllipsis"/>
                                 </StackPanel>
                                 <ItemsControl x:Name="MonitorItems" Grid.Row="1" Margin="0,22,0,16">
                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>

@@ -130,6 +130,9 @@ public sealed class AppSettings
     public bool ReduceMotion { get; set; } = false;
     public bool LowPerformanceMode { get; set; } = false;
     public bool DisableBackgroundGlow { get; set; } = false;
+    public bool SafeMode { get; set; }
+    public string SafeModeReason { get; set; } = string.Empty;
+    public int ConsecutiveStartupFailures { get; set; }
     public string? ActiveProfileId { get; set; }
     public string? DataRoot { get; set; }
     /// <summary>Default is intentionally lightweight: only the core host and wallpaper matcher run.</summary>

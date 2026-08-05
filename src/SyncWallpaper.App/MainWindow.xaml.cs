@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
@@ -33,6 +34,7 @@ public partial class MainWindow : Window
     private void Refresh()
     {
         StatusBadge.Text = _runtime.StatusText; OverviewStatus.Text = _runtime.StatusText; LastMessage.Text = _runtime.LastMessage;
+        WallpaperTransactionText.Text = $"{_runtime.LastWallpaperTransaction.State} · {_runtime.LastWallpaperTransaction.DurationMilliseconds:0} ms · {_runtime.LastWallpaperTransaction.Message}";
         MonitorCount.Text = _runtime.Monitors.Count.ToString(); ProfileName.Text = _runtime.LastMatch?.Profile?.Name ?? "未选择";
         Confidence.Text = _runtime.LastMatch is null ? "—" : $"{_runtime.LastMatch.Confidence}%";
         _displayItems.Clear();
@@ -41,11 +43,15 @@ public partial class MainWindow : Window
             var role = _runtime.LastMatch?.RoleMatches.FirstOrDefault(x => x.Value.MonitorDevicePath.Equals(m.MonitorDevicePath, StringComparison.OrdinalIgnoreCase)).Key ?? (m.IsInternal ? "Laptop" : m.Width >= m.Height ? "Landscape" : "Portrait");
             _displayItems.Add(new DisplayItem(role, m.DisplayLabel, $"{m.Width} × {m.Height} · 方向 {m.Rotation}", $"{m.ManufacturerName} / {m.ProductCodeId}"));
         }
-        DisplayDetails.ItemsSource = _runtime.Monitors.Select(m => new DisplayItem(
-            m.IsInternal ? "Laptop" : (m.Width >= m.Height ? "Landscape" : "Portrait"),
-            string.IsNullOrWhiteSpace(m.WindowsDisplayName) ? m.DisplayLabel : $"{m.DisplayLabel} · {m.WindowsDisplayName}",
-            $"{m.Width} × {m.Height} · 原生 {m.NativeWidth} × {m.NativeHeight} · {m.RefreshRateNumerator}/{Math.Max(1, m.RefreshRateDenominator)} Hz · 方向 {m.Rotation} · 桌面 {m.DesktopX},{m.DesktopY}",
-            $"身份 {m.StableIdSource}: {m.StableId} · Container {m.ContainerId} · 路径 {m.MonitorDevicePath} · 序列号 {m.EdidSerialNumber} · Adapter {m.AdapterId} / Target {m.TargetId} · 接口 {m.OutputTechnology}/{m.ConnectorInstance} · {m.ConnectionState}"));
+        DisplayDetails.ItemsSource = _runtime.Monitors.Select(m =>
+        {
+            var safe = MonitorIdentitySanitizer.Sanitize(m);
+            return new DisplayItem(
+                m.IsInternal ? "Laptop" : (m.Width >= m.Height ? "Landscape" : "Portrait"),
+                string.IsNullOrWhiteSpace(m.WindowsDisplayName) ? m.DisplayLabel : $"{m.DisplayLabel} · {m.WindowsDisplayName}",
+                $"{m.Width} × {m.Height} · 原生 {m.NativeWidth} × {m.NativeHeight} · {m.RefreshRateNumerator}/{Math.Max(1, m.RefreshRateDenominator)} Hz · 方向 {m.Rotation} · 桌面 {m.DesktopX},{m.DesktopY}",
+                $"身份 {safe.StableIdSource}: {safe.StableId} · Container {safe.ContainerId} · 路径 {safe.MonitorDevicePath} · 序列号 {safe.Serial} · Adapter {safe.AdapterId} / Target {safe.TargetId} · 接口 {safe.OutputTechnology}/{safe.ConnectorInstance} · {safe.ConnectionState}");
+        });
         EvidenceText.Text = _runtime.LastMatch is null ? "尚未检测" : string.Join(Environment.NewLine, _runtime.LastMatch.Evidence.Select(x => $"· {x.Role} ← {x.Monitor}：{x.Reason}（{x.Score}）")) + Environment.NewLine + _runtime.LastMatch.Message;
         _libraryItems.Clear(); foreach (var a in _runtime.Library.Assets) _libraryItems.Add(new LibraryItem(a.DisplayName, $"{a.Width} × {a.Height} · {a.Format} · {a.FileSize / 1024} KB", a.ManagedRelativePath));
         DisplayProfilesItems.ItemsSource = _runtime.DisplayConfigurations.Profiles.Select(x => new DisplayProfileItem(x.Name, x.Displays.Count, x.ModifiedAt.ToLocalTime().ToString("MM-dd HH:mm"))).ToList();
@@ -173,7 +179,11 @@ public partial class MainWindow : Window
         {
             var snapshot = _runtime.CaptureDiagnosticSnapshot();
             DiagnosticSummaryText.Text = $"{snapshot.WindowsVersion} · 软件 {snapshot.SoftwareVersion} · {snapshot.CapturedAt:yyyy-MM-dd HH:mm:ss}";
-            var displays = string.Join(Environment.NewLine, snapshot.Displays.Select(x => $"显示器：{x.DisplayLabel} [{x.WindowsDisplayName}] | Stable={x.StableIdSource}:{x.StableId} | Container={x.ContainerId} | Path={x.MonitorDevicePath} | Adapter {x.AdapterId} Target {x.TargetId} | Connector {x.OutputTechnology}/{x.ConnectorInstance} | {x.Width}×{x.Height} native={x.NativeWidth}×{x.NativeHeight} {x.RefreshRateNumerator}/{Math.Max(1, x.RefreshRateDenominator)}Hz rot={x.Rotation} pos={x.DesktopX},{x.DesktopY} | 主屏={x.IsPrimary} | {x.ConnectionState}"));
+            var displays = string.Join(Environment.NewLine, snapshot.Displays.Select(x =>
+            {
+                var safe = MonitorIdentitySanitizer.Sanitize(x);
+                return $"显示器：{safe.FriendlyName} [{x.WindowsDisplayName}] | Stable={safe.StableIdSource}:{safe.StableId} | Container={safe.ContainerId} | Path={safe.MonitorDevicePath} | Adapter {safe.AdapterId} Target {safe.TargetId} | Connector {safe.OutputTechnology}/{safe.ConnectorInstance} | {safe.Width}×{safe.Height} native={safe.NativeWidth}×{safe.NativeHeight} {safe.RefreshRateNumerator}/{Math.Max(1, safe.RefreshRateDenominator)}Hz rot={safe.Rotation} pos={safe.DesktopX},{safe.DesktopY} | 主屏={safe.IsPrimary} | {safe.ConnectionState}";
+            }));
             var audio = string.Join(Environment.NewLine, snapshot.AudioDevices.Select(x => $"音频：{x.Kind} | {x.FriendlyName} | {x.State} | {x.DeviceId}"));
             var defaults = string.Join(Environment.NewLine, snapshot.AudioDefaults.Select(x => $"默认 {x.Key}：{x.Value?.FriendlyName ?? "无"}"));
             var resources = snapshot.Resources;
@@ -192,7 +202,31 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { DiagnosticDetailsText.Text = "只读检查失败：" + ex.Message; }
     }
-    private void ExportDiagnostic_Click(object sender, RoutedEventArgs e) => ExportJson("diagnostic-report.json", _runtime.CaptureDiagnosticSnapshot());
+    private void ExportDiagnostic_Click(object sender, RoutedEventArgs e)
+    {
+        var snapshot = _runtime.CaptureDiagnosticSnapshot();
+        ExportJson("diagnostic-report.json", new
+        {
+            snapshot.CapturedAt,
+            snapshot.WindowsVersion,
+            snapshot.SoftwareVersion,
+            Displays = snapshot.Displays.Select(MonitorIdentitySanitizer.Sanitize).ToArray(),
+            snapshot.AudioDevices,
+            snapshot.AudioDefaults,
+            snapshot.WindowCount,
+            snapshot.ElevatedWindowCount,
+            snapshot.WindowListenerStatus,
+            snapshot.ExplorerStatus,
+            snapshot.ComInitializationStatus,
+            snapshot.LastSystemEvent,
+            snapshot.LastTransaction,
+            snapshot.LastRollback,
+            snapshot.DesktopShellItemCount,
+            snapshot.Modules,
+            snapshot.PerformanceHistory,
+            snapshot.Resources
+        });
+    }
     private void DiagnosticDisplayRollback_Click(object sender, RoutedEventArgs e) => ShowRiskPlan("显示配置回滚", "B/C：需要明确确认。将先保存 CCD 快照，再选择已报告支持的低风险位置变化，应用后等待 15 秒，不保留则自动恢复并逐项验证。当前未执行任何变化。");
     private void DiagnosticAudioSwitch_Click(object sender, RoutedEventArgs e) => ShowRiskPlan("音频切换恢复", "B：需要明确选择目标播放/录音设备并确认。只允许 Active 且可恢复的设备；当前未执行切换。");
     private void DiagnosticWindowLayout_Click(object sender, RoutedEventArgs e) => ShowRiskPlan("窗口布局验证", "A/B：将只创建 TestWindowA/B/C 临时窗口，保存、移动、恢复后关闭；不会触碰用户应用。当前未执行。");
@@ -219,7 +253,28 @@ public partial class MainWindow : Window
     {
         var dialog = new Microsoft.Win32.SaveFileDialog { FileName = fileName, Filter = "JSON 配置|*.json|所有文件|*.*" };
         if (dialog.ShowDialog() != true) return;
-        File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true }));
+        var node = JsonSerializer.SerializeToNode(value);
+        SanitizeExportNode(node);
+        File.WriteAllText(dialog.FileName, node?.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) ?? "{}");
+    }
+
+    private static void SanitizeExportNode(JsonNode? node)
+    {
+        if (node is not JsonObject obj) return;
+        foreach (var property in obj.ToList())
+        {
+            if (property.Value is JsonValue value && value.TryGetValue<string>(out var text) && !string.IsNullOrWhiteSpace(text)
+                && (property.Key.Contains("Serial", StringComparison.OrdinalIgnoreCase)
+                    || property.Key.Contains("Container", StringComparison.OrdinalIgnoreCase)
+                    || property.Key.Equals("MonitorDevicePath", StringComparison.OrdinalIgnoreCase)
+                    || property.Key.Equals("InstanceName", StringComparison.OrdinalIgnoreCase)
+                    || property.Key.Equals("StableId", StringComparison.OrdinalIgnoreCase)
+                    || property.Key.Equals("AdapterLuid", StringComparison.OrdinalIgnoreCase)
+                    || property.Key.Equals("DeviceId", StringComparison.OrdinalIgnoreCase)
+                    || property.Key.Equals("Path", StringComparison.OrdinalIgnoreCase)))
+                obj[property.Key] = JsonValue.Create(MonitorIdentitySanitizer.RedactPath(text));
+            else SanitizeExportNode(property.Value);
+        }
     }
     private sealed record DisplayItem(string Role, string Label, string Resolution, string Identity);
     private sealed record LibraryItem(string Name, string Details, string Path);
