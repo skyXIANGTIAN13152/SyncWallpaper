@@ -15,11 +15,13 @@ public partial class App : System.Windows.Application
     private MainWindow? _window;
     private GlobalHotkeyService? _hotkeys;
     private bool _background;
+    private bool _validationMode;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         _background = e.Args.Any(a => a.Equals("--background", StringComparison.OrdinalIgnoreCase));
+        _validationMode = e.Args.Any(a => a.Equals("--validation", StringComparison.OrdinalIgnoreCase));
         _singleInstance = new SingleInstanceService();
         if (!_singleInstance.TryAcquire()) { Shutdown(); return; }
         _runtime = new AppRuntime();
@@ -27,7 +29,7 @@ public partial class App : System.Windows.Application
         _tray = new NotifyIcon { Icon = CreateTrayIcon(), Visible = true, Text = "屏序 SyncWallpaper" };
         _tray.DoubleClick += (_, _) => ShowMainWindow();
         _tray.ContextMenuStrip = BuildTrayMenu();
-        _runtime.Start();
+        _runtime.Start(_validationMode);
         if (!_background) ShowMainWindow();
     }
 

@@ -14,6 +14,7 @@ internal static class Program
 
     public static int Main(string[] args)
     {
+        WindowsDpiAwareness.TryEnablePerMonitorV2();
         var output = ReadOption(args, "--output") ?? Path.Combine(FindWorkspace(), "artifacts", "validation-snapshots", "hardware-validation-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + ".json");
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output))!);
         var report = new HardwareValidationReport { ToolVersion = typeof(Program).Assembly.GetName().Version?.ToString() ?? "RC1" };

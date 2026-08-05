@@ -72,6 +72,7 @@ public sealed class AppRuntime : IDisposable
     private bool _desktopModuleRunning;
     private bool _automationModuleRunning;
     private bool _wallpaperModuleRunning;
+    private bool _sessionAutoMatchSuppressed;
     private readonly DateTime _createdAt = DateTime.UtcNow;
     private string _lastWindowEvent = "尚未收到窗口事件";
 
@@ -356,8 +357,9 @@ public sealed class AppRuntime : IDisposable
         RaiseChanged();
     }
 
-    public void Start()
+    public void Start(bool suppressAutoMatch = false)
     {
+        _sessionAutoMatchSuppressed = suppressAutoMatch;
         Paths.Ensure();
         Modules.StartEnabledAsync(Settings.Modules).GetAwaiter().GetResult();
         RecordModulePerformance();
@@ -383,7 +385,7 @@ public sealed class AppRuntime : IDisposable
             }
             catch (Exception ex) { _log.Warn("Display", "保存初始显示配置失败：" + ex.Message); }
         }
-        StatusText = "监测中";
+        StatusText = _sessionAutoMatchSuppressed ? "验证模式（不自动应用壁纸）" : "监测中";
         _coordinator.Start();
         RaiseChanged();
     }
@@ -460,9 +462,11 @@ public sealed class AppRuntime : IDisposable
             if (_legacyTriggerEngine is not null)
                 await _legacyTriggerEngine.FireAsync(TriggerEvent.DisplayConfigurationChanged, Triggers, activeProfile: LastMatch?.Profile?.Id);
         }
-        if (!Settings.AutoMatchEnabled)
+        if (_sessionAutoMatchSuppressed || !Settings.AutoMatchEnabled)
         {
-            StatusText = "已暂停"; LastMessage = "自动匹配已暂停"; RaiseChanged(); return;
+            StatusText = _sessionAutoMatchSuppressed ? "验证模式" : "已暂停";
+            LastMessage = _sessionAutoMatchSuppressed ? "验证模式不会自动应用壁纸；请使用明确的手动按钮" : "自动匹配已暂停";
+            RaiseChanged(); return;
         }
         await MatchAndApplyAsync();
     }
@@ -826,6 +830,14 @@ public sealed class AppRuntime : IDisposable
             ?? Profiles.Profiles.FirstOrDefault(x => x.ExpectedMonitorCount == assignments.Count)
             ?? ProfileTemplates.Custom("手动确认配置", assignments.Select(x => x.Role));
         if (!Profiles.Profiles.Contains(profile)) Profiles.Profiles.Add(profile);
+        // The identification dialog intentionally allows the user to confirm only the
+        // logical role.  Its wallpaper fields may be left blank when the role already
+        // has a configured library asset; preserve that binding instead of turning a
+        // confirmation into an accidental wallpaper reset.
+        var existingRoles = profile.Roles
+            .Where(x => !string.IsNullOrWhiteSpace(x.Role))
+            .GroupBy(x => x.Role, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
         profile.Roles.Clear();
         profile.ExpectedMonitorCount = assignments.Count;
         profile.Combination = assignments.Count == 1 ? DisplayCombinationKind.LaptopOnly : assignments.Count == 3 ? DisplayCombinationKind.ThreeMonitorSetup : DisplayCombinationKind.Custom;
@@ -836,10 +848,35 @@ public sealed class AppRuntime : IDisposable
                 || (!string.IsNullOrWhiteSpace(assignment.MonitorDevicePath) && string.Equals(x.MonitorDevicePath, assignment.MonitorDevicePath, StringComparison.OrdinalIgnoreCase)));
             if (monitor is null) continue;
             var role = string.Equals(assignment.Role, "Custom", StringComparison.OrdinalIgnoreCase) ? $"Custom-{monitor.WindowsDisplayName.Trim('\\', '.', 'D', 'I', 'S', 'P', 'L', 'A', 'Y')}" : assignment.Role;
+            existingRoles.TryGetValue(role, out var existing);
+            var wallpaperPath = assignment.WallpaperPath;
+            // An explicitly selected file is authoritative; only inherit the
+            // previous asset when the dialog left the path blank.
+            var wallpaperAssetId = string.IsNullOrWhiteSpace(wallpaperPath) ? existing?.WallpaperAssetId ?? string.Empty : string.Empty;
+            if (string.IsNullOrWhiteSpace(wallpaperPath) && !string.IsNullOrWhiteSpace(wallpaperAssetId))
+            {
+                var asset = Library.Assets.FirstOrDefault(x => string.Equals(x.Id, wallpaperAssetId, StringComparison.OrdinalIgnoreCase));
+                if (asset is not null)
+                    wallpaperPath = asset.StorageMode.Equals("External", StringComparison.OrdinalIgnoreCase)
+                        ? asset.ExternalPath ?? string.Empty
+                        : Path.Combine(Paths.Root, asset.ManagedRelativePath.Replace('/', Path.DirectorySeparatorChar));
+            }
+            var displayName = role switch
+            {
+                "Laptop" => "笔记本本体",
+                "Landscape" => "横屏1",
+                "Portrait" => "竖屏1",
+                _ => existing?.DisplayName ?? role
+            };
             profile.Roles.Add(new MonitorRoleBinding
             {
-                Role = role, DisplayName = role, Fingerprint = monitor.Clone(), WallpaperPath = assignment.WallpaperPath,
-                AllowAutoRebind = false, LastKnownMonitorDevicePath = monitor.MonitorDevicePath, Notes = "用户在 A/B/C 识别界面确认"
+                RoleId = existing?.RoleId ?? Guid.NewGuid().ToString("N"),
+                Role = role, DisplayName = displayName, Fingerprint = monitor.Clone(),
+                WallpaperAssetId = wallpaperAssetId, WallpaperPath = wallpaperPath,
+                FitMode = existing?.FitMode ?? WallpaperFitMode.Fill,
+                BackgroundColor = existing?.BackgroundColor ?? "#050B18",
+                AllowAutoRebind = false, LastKnownMonitorDevicePath = monitor.MonitorDevicePath,
+                Notes = "用户在 A/B/C 识别界面确认"
             });
         }
         Settings.ActiveProfileId = profile.Id;

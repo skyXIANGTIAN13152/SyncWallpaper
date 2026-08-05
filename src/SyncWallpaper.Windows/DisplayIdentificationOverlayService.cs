@@ -1,7 +1,9 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
+using System.Runtime.InteropServices;
 using FormsScreen = System.Windows.Forms.Screen;
 using WpfComboBox = System.Windows.Controls.ComboBox;
 using WpfTextBox = System.Windows.Controls.TextBox;
@@ -11,7 +13,8 @@ using SyncWallpaper.Core;
 
 namespace SyncWallpaper.Windows;
 
-public sealed record DisplayIdentificationMark(string Label, string MonitorDevicePath, string StableId, string Details);
+public sealed record DisplayIdentificationMark(string Label, string MonitorDevicePath, string StableId, string Details,
+    bool IsInternal = false, int Width = 0, int Height = 0);
 public sealed record ManualDisplayAssignment(string StableId, string MonitorDevicePath, string Role, string WallpaperPath);
 
 /// <summary>Non-destructive A/B/C overlay used when the identity matcher reports ambiguity.</summary>
@@ -35,20 +38,28 @@ public sealed class DisplayIdentificationOverlayService
         {
             var monitor = monitors[i];
             var label = ((char)('A' + i)).ToString();
-            var screen = i < screens.Length ? screens[i] : FormsScreen.PrimaryScreen;
+            // QueryDisplayConfig order is not a permanent screen order. Match
+            // the overlay to the GDI device name (and only then geometry), so
+            // A/B/C cannot land on the wrong physical panel after reconnects.
+            var screen = FindScreen(monitor, screens);
             if (screen is null) continue;
+            var scale = GetMonitorScale(screen);
+            var bounds = screen.Bounds;
             var details = $"{label}\n{monitor.DisplayLabel}\n{monitor.Width}×{monitor.Height}\n{monitor.StableIdSource}";
             var window = new Window
             {
                 WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false, Topmost = true,
-                Left = screen.Bounds.Left, Top = screen.Bounds.Top, Width = screen.Bounds.Width, Height = screen.Bounds.Height,
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = 0, Top = 0, Width = Math.Max(1, bounds.Width / scale), Height = Math.Max(1, bounds.Height / scale),
                 AllowsTransparency = true, Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(170, 4, 15, 32)),
-                Content = new TextBlock { Text = details, Foreground = System.Windows.Media.Brushes.White, FontSize = Math.Max(42, Math.Min(screen.Bounds.Width, screen.Bounds.Height) / 10),
+                Content = new TextBlock { Text = details, Foreground = System.Windows.Media.Brushes.White, FontSize = Math.Max(42, Math.Min(bounds.Width, bounds.Height) / 10 / scale),
                     FontWeight = FontWeights.Bold, TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = System.Windows.HorizontalAlignment.Center }
             };
             window.MouseDown += (_, _) => FinishIfReady();
             windows.Add(window);
-            marks.Add(new DisplayIdentificationMark(label, monitor.MonitorDevicePath, monitor.StableId, details.Replace('\n', ' ')));
+            marks.Add(new DisplayIdentificationMark(label, monitor.MonitorDevicePath, monitor.StableId,
+                details.Replace('\n', ' '), monitor.IsInternal, monitor.Width, monitor.Height));
+            window.SourceInitialized += (_, _) => PlaceWindow(window, bounds);
         }
         void FinishIfReady()
         {
@@ -64,6 +75,54 @@ public sealed class DisplayIdentificationOverlayService
         _ = tcs.Task.ContinueWith(_ => registration.Dispose(), TaskScheduler.Default);
         return tcs.Task;
     }
+
+    private static FormsScreen? FindScreen(MonitorIdentity monitor, FormsScreen[] screens)
+        => screens.FirstOrDefault(x => !string.IsNullOrWhiteSpace(monitor.WindowsDisplayName)
+                && string.Equals(x.DeviceName, monitor.WindowsDisplayName, StringComparison.OrdinalIgnoreCase))
+            ?? screens.FirstOrDefault(x => x.Bounds.Left == monitor.DesktopX && x.Bounds.Top == monitor.DesktopY);
+
+    private static void PlaceWindow(Window window, System.Drawing.Rectangle bounds)
+    {
+        var handle = new WindowInteropHelper(window).Handle;
+        if (handle == IntPtr.Zero) return;
+        SetWindowPos(handle, HwndTopmost, bounds.Left, bounds.Top, bounds.Width, bounds.Height, SwpNoActivate | SwpShowWindow);
+        // Window.Left/Top/Width/Height are WPF DIPs while SetWindowPos uses
+        // physical pixels. Reconcile the WPF layout after Windows applies the
+        // target monitor DPI, then set the native rectangle once more.
+        var dpi = GetDpiForWindow(handle);
+        var scale = dpi == 0 ? 1.0 : dpi / 96.0;
+        window.Width = Math.Max(1, bounds.Width / scale);
+        window.Height = Math.Max(1, bounds.Height / scale);
+        window.UpdateLayout();
+        SetWindowPos(handle, HwndTopmost, bounds.Left, bounds.Top, bounds.Width, bounds.Height, SwpNoActivate | SwpShowWindow);
+    }
+
+    private static double GetMonitorScale(FormsScreen screen)
+    {
+        try
+        {
+            var point = new POINT { X = screen.Bounds.Left + 1, Y = screen.Bounds.Top + 1 };
+            var monitor = MonitorFromPoint(point, MonitorDefaultToNearest);
+            if (monitor != IntPtr.Zero && GetDpiForMonitor(monitor, 0, out var x, out _) == 0 && x > 0) return x / 96.0;
+        }
+        catch (DllNotFoundException) { }
+        catch (EntryPointNotFoundException) { }
+        return 1.0;
+    }
+
+    private const uint MonitorDefaultToNearest = 2;
+    private const uint SwpNoActivate = 0x0010;
+    private const uint SwpShowWindow = 0x0040;
+    private static readonly IntPtr HwndTopmost = new(-1);
+
+    [StructLayout(LayoutKind.Sequential)] private struct POINT { public int X, Y; }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+
+    [DllImport("user32.dll")] private static extern IntPtr MonitorFromPoint(POINT point, uint flags);
+    [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hWnd);
+    [DllImport("shcore.dll")] private static extern int GetDpiForMonitor(IntPtr hMonitor, uint dpiType, out uint dpiX, out uint dpiY);
 }
 
 /// <summary>Non-modal role and wallpaper confirmation shown after the A/B/C overlay.</summary>
@@ -79,29 +138,72 @@ public sealed class DisplayRoleAssignmentService
     private static Task<IReadOnlyList<ManualDisplayAssignment>> ShowCore(IReadOnlyList<DisplayIdentificationMark> marks, CancellationToken cancellationToken)
     {
         var tcs = new TaskCompletionSource<IReadOnlyList<ManualDisplayAssignment>>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var window = new Window { Title = "屏序 · 确认逻辑角色与壁纸", Width = 760, Height = 520, WindowStartupLocation = WindowStartupLocation.CenterScreen,
+        var window = new Window { Title = "屏序 · 确认逻辑角色与壁纸", Width = 900, Height = 600, MinWidth = 760, MinHeight = 460, WindowStartupLocation = WindowStartupLocation.CenterScreen,
             Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(7, 13, 27)), Foreground = WpfBrushes.White, Topmost = true };
-        var root = new DockPanel { Margin = new Thickness(20) };
+        var root = new DockPanel { Margin = new Thickness(20), LastChildFill = false };
         var heading = new TextBlock { Text = "同型号或无序列号显示器需要手动确认", FontSize = 20, Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(54, 232, 255)), Margin = new Thickness(0, 0, 0, 14) };
         DockPanel.SetDock(heading, Dock.Top); root.Children.Add(heading);
         var rows = new List<(DisplayIdentificationMark Mark, WpfComboBox Role, WpfTextBox Path)>();
         var grid = new Grid(); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(250) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 360 });
         AddHeader(grid, 0, 0, "屏幕"); AddHeader(grid, 0, 1, "稳定身份"); AddHeader(grid, 0, 2, "逻辑角色"); AddHeader(grid, 0, 3, "壁纸路径");
+        var inputForeground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(10, 25, 42));
+        var inputBackground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(250, 253, 255));
+        var comboItemStyle = new Style(typeof(System.Windows.Controls.ComboBoxItem));
+        comboItemStyle.Setters.Add(new Setter(System.Windows.Controls.Control.ForegroundProperty, inputForeground));
+        comboItemStyle.Setters.Add(new Setter(System.Windows.Controls.Control.BackgroundProperty, inputBackground));
+        comboItemStyle.Setters.Add(new Setter(System.Windows.Controls.Control.PaddingProperty, new Thickness(8, 5, 8, 5)));
+        comboItemStyle.Setters.Add(new Setter(System.Windows.Controls.Control.FontSizeProperty, 14d));
+        comboItemStyle.Setters.Add(new Setter(System.Windows.Documents.TextElement.ForegroundProperty, inputForeground));
+        var comboItemSelected = new Trigger { Property = System.Windows.Controls.ComboBoxItem.IsSelectedProperty, Value = true };
+        comboItemSelected.Setters.Add(new Setter(System.Windows.Controls.Control.ForegroundProperty, inputForeground));
+        comboItemSelected.Setters.Add(new Setter(System.Windows.Documents.TextElement.ForegroundProperty, inputForeground));
+        comboItemSelected.Setters.Add(new Setter(System.Windows.Controls.Control.BackgroundProperty, new SolidColorBrush(System.Windows.Media.Color.FromRgb(184, 225, 245))));
+        comboItemStyle.Triggers.Add(comboItemSelected);
+        var comboTemplate = new DataTemplate { VisualTree = new FrameworkElementFactory(typeof(TextBlock)) };
+        comboTemplate.VisualTree.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding());
+        comboTemplate.VisualTree.SetValue(TextBlock.ForegroundProperty, inputForeground);
+        comboTemplate.VisualTree.SetValue(TextBlock.FontSizeProperty, 14d);
+        comboTemplate.VisualTree.SetValue(TextBlock.MarginProperty, new Thickness(2, 1, 2, 1));
         for (var i = 0; i < marks.Count; i++)
         {
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var mark = marks[i]; var role = new WpfComboBox { ItemsSource = new[] { "Laptop", "Landscape", "Portrait", "Custom" }, SelectedIndex = i == 0 ? 0 : i == 1 ? 1 : 2, Margin = new Thickness(4) };
-            var path = new WpfTextBox { Margin = new Thickness(4), MinWidth = 250 };
-            var browse = new System.Windows.Controls.Button { Content = "选择…", Margin = new Thickness(4), Padding = new Thickness(8, 4, 8, 4) };
+            var mark = marks[i];
+            var defaultRole = mark.IsInternal ? "Laptop" : mark.Width >= mark.Height ? "Landscape" : "Portrait";
+            var role = new WpfComboBox
+            {
+                ItemsSource = new[] { "Laptop", "Landscape", "Portrait", "Custom" },
+                SelectedIndex = defaultRole switch { "Laptop" => 0, "Landscape" => 1, "Portrait" => 2, _ => 3 },
+                Margin = new Thickness(4),
+                Foreground = inputForeground,
+                Background = inputBackground,
+                BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(94, 137, 170)),
+                FontSize = 14,
+                ItemContainerStyle = comboItemStyle,
+                ItemTemplate = comboTemplate,
+                ToolTip = "选择逻辑角色"
+            };
+            role.Resources[System.Windows.SystemColors.ControlTextBrushKey] = inputForeground;
+            role.Resources[System.Windows.SystemColors.WindowTextBrushKey] = inputForeground;
+            role.Resources[System.Windows.SystemColors.HighlightTextBrushKey] = inputForeground;
+            var path = new WpfTextBox
+            {
+                Margin = new Thickness(4), MinWidth = 250, FontSize = 14,
+                Foreground = inputForeground, Background = inputBackground,
+                BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(94, 137, 170)),
+                CaretBrush = inputForeground,
+                ToolTip = "选择或输入壁纸文件路径"
+            };
+            var browse = new System.Windows.Controls.Button { Content = "选择…", Margin = new Thickness(4), Padding = new Thickness(10, 5, 10, 5), Foreground = WpfBrushes.White, Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(20, 65, 98)) };
             browse.Click += (_, _) => { var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "图片|*.jpg;*.jpeg;*.png;*.bmp" }; if (dialog.ShowDialog() == true) path.Text = dialog.FileName; };
             var pathPanel = new StackPanel { Orientation = WpfOrientation.Horizontal }; pathPanel.Children.Add(path); pathPanel.Children.Add(browse);
             AddCell(grid, i + 1, 0, new TextBlock { Text = mark.Label, FontSize = 20, Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(54, 232, 255)), Margin = new Thickness(4) });
-            AddCell(grid, i + 1, 1, new TextBlock { Text = string.IsNullOrWhiteSpace(mark.StableId) ? "（无稳定 ID）" : mark.StableId, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(4), Foreground = WpfBrushes.LightGray });
+            AddCell(grid, i + 1, 1, new TextBlock { Text = string.IsNullOrWhiteSpace(mark.StableId) ? "（无稳定 ID）" : MonitorIdentitySanitizer.Redact(mark.StableId), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(4), Foreground = WpfBrushes.LightGray, ToolTip = "稳定身份已脱敏" });
             AddCell(grid, i + 1, 2, role); AddCell(grid, i + 1, 3, pathPanel); rows.Add((mark, role, path));
         }
-        root.Children.Add(new ScrollViewer { Content = grid, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
-        var buttons = new StackPanel { Orientation = WpfOrientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
+        var content = new ScrollViewer { Content = grid, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        DockPanel.SetDock(content, Dock.Top); root.Children.Add(content);
+        var buttons = new StackPanel { Orientation = WpfOrientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 16, 0, 0) };
         var save = new System.Windows.Controls.Button { Content = "保存绑定", Padding = new Thickness(18, 8, 18, 8), Margin = new Thickness(6) };
         var cancel = new System.Windows.Controls.Button { Content = "取消", Padding = new Thickness(18, 8, 18, 8), Margin = new Thickness(6) };
         buttons.Children.Add(cancel); buttons.Children.Add(save); DockPanel.SetDock(buttons, Dock.Bottom); root.Children.Add(buttons); window.Content = root;

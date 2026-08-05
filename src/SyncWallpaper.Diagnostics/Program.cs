@@ -15,6 +15,7 @@ internal static class Program
 
     public static async Task<int> Main(string[] args)
     {
+        WindowsDpiAwareness.TryEnablePerMonitorV2();
         Directory.CreateDirectory(OutputRoot);
         var command = args.FirstOrDefault(x => !x.StartsWith("--", StringComparison.Ordinal))?.ToLowerInvariant() ?? "help";
         try
@@ -22,6 +23,7 @@ internal static class Program
             return command switch
             {
                 "snapshot" => await SnapshotAsync(args),
+                "wallpaper-snapshot" => await WallpaperSnapshotAsync(args),
                 "soak" => await SoakAsync(args),
                 "verify" => await VerifyAsync(args),
                 "sim-soak" => await SimulationSoakAsync(args),
@@ -47,6 +49,7 @@ internal static class Program
     {
         Console.WriteLine("SyncWallpaper.Diagnostics");
         Console.WriteLine("  snapshot                         只读快照（JSON）");
+        Console.WriteLine("  wallpaper-snapshot               只读读取实际壁纸路径和文件哈希（JSON）");
         Console.WriteLine("  soak --duration-minutes 60       安全宿主/资源长时间采样");
         Console.WriteLine("  verify [--interactive]           安全验证清单；危险项默认不执行");
         Console.WriteLine("  sim-soak --events 10000           虚拟拓扑事件压力测试（不改动系统）");
@@ -121,6 +124,15 @@ internal static class Program
         Console.WriteLine($"只读快照已写入：{path}");
         Console.WriteLine($"显示器={snapshot.DisplayCount}，Explorer={(snapshot.ExplorerRunning ? "运行中" : "未运行")}，自身 WorkingSet={snapshot.Self.WorkingSetBytes:N0} bytes");
         return 0;
+    }
+
+    private static async Task<int> WallpaperSnapshotAsync(string[] args)
+    {
+        var snapshot = new WallpaperSnapshotService().Capture();
+        var path = GetPath(args, "output", "wallpaper-snapshot");
+        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(snapshot, JsonOptions));
+        Console.WriteLine($"实际壁纸只读快照已写入：{path}；活动显示器={snapshot.ActiveMonitorCount}；壁纸记录={snapshot.Monitors.Count}；错误={(snapshot.Error ?? "无")}");
+        return snapshot.Error is null ? 0 : 1;
     }
 
     private static async Task<int> SoakAsync(string[] args)
@@ -261,7 +273,11 @@ internal static class Program
         var process = Process.GetCurrentProcess(); process.Refresh();
         var monitors = new MonitorDiscoveryService().Discover();
         var resource = new WindowsResourceDiagnosticsProvider().Capture();
-        return new DiagnosticSnapshot(DateTime.UtcNow, reason, monitors.Count, monitors, Process.GetProcessesByName("explorer").Length > 0,
+        // Diagnostic exports must never persist raw EDID serials, ContainerIds,
+        // monitor paths or adapter identifiers. Matching still uses the raw
+        // in-memory identities; only the serialized snapshot is sanitized.
+        var sanitized = monitors.Select(MonitorIdentitySanitizer.Sanitize).ToList();
+        return new DiagnosticSnapshot(DateTime.UtcNow, reason, monitors.Count, sanitized, Process.GetProcessesByName("explorer").Length > 0,
             new ResourceInfo(resource.WorkingSetBytes, resource.PrivateBytes, resource.HandleCount, resource.ThreadCount, resource.GdiObjects, resource.UserObjects, resource.CpuSeconds),
             childPid is null ? null : TryGetProcess(childPid.Value));
     }
@@ -461,7 +477,7 @@ internal static class Program
         return Directory.GetCurrentDirectory();
     }
 
-    private sealed record DiagnosticSnapshot(DateTime TimestampUtc, string Reason, int DisplayCount, IReadOnlyList<MonitorIdentity> Displays, bool ExplorerRunning, ResourceInfo Self, ResourceInfo? Child);
+    private sealed record DiagnosticSnapshot(DateTime TimestampUtc, string Reason, int DisplayCount, IReadOnlyList<SanitizedMonitorDiagnostic> Displays, bool ExplorerRunning, ResourceInfo Self, ResourceInfo? Child);
     private sealed record ResourceInfo(long WorkingSetBytes, long PrivateBytes, int HandleCount, int ThreadCount, int GdiObjects, int UserObjects, double CpuSeconds);
     private sealed record SoakSample(DateTime TimestampUtc, double ElapsedSeconds, long SelfWorkingSetBytes, long SelfPrivateBytes, int SelfHandleCount, int SelfThreadCount, int SelfGdiObjects, int SelfUserObjects, double SelfCpuSeconds, long HostWorkingSetBytes, long HostPrivateBytes, int HostHandleCount, int HostThreadCount, int HostGdiObjects, int HostUserObjects, double HostCpuSeconds, string HostModuleState, string? HostError, int DisplayCount);
     private sealed record MetricSummary(double Min, double Average, double Max, double Start, double End);
