@@ -6,6 +6,17 @@ $ErrorActionPreference = "Stop"
 $target = [IO.Path]::GetFullPath($InstallRoot)
 $allowedRoot = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA "Programs"))
 if (-not $target.StartsWith($allowedRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw "卸载目录必须位于当前用户 LocalAppData\Programs 下。" }
+$targetPrefix = $target.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+foreach ($name in @("SyncWallpaper.App", "SyncWallpaper.Host", "SyncWallpaper.Diagnostics", "SyncWallpaper.HardwareValidation")) {
+    Get-Process -Name $name -ErrorAction SilentlyContinue | ForEach-Object {
+        try {
+            $processPath = $_.Path
+            if (-not [string]::IsNullOrWhiteSpace($processPath) -and $processPath.StartsWith($targetPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+                Stop-Process -Id $_.Id -Force -ErrorAction Stop
+            }
+        } catch { Write-Warning ("无法停止进程 " + $_.Id + "；程序文件可能仍被占用。") }
+    }
+}
 $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 Remove-ItemProperty -Path $runKey -Name "SyncWallpaper" -ErrorAction SilentlyContinue
 foreach ($path in @(
