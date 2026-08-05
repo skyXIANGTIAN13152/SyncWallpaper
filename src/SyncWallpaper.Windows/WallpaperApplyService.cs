@@ -122,9 +122,19 @@ public sealed class WallpaperApplyService
         }
         catch (OperationCanceledException)
         {
-            state.TryTransition(WallpaperTransactionState.Cancelled);
-            PublishTransaction(generation, state.Current, started, DateTime.UtcNow, applied, expected, retries, rollbackSucceeded, "壁纸事务已取消");
-            return new ApplyResult(false, "壁纸事务已取消", applied);
+            if (desktop is not null && changed.Count > 0)
+            {
+                state.TryTransition(WallpaperTransactionState.RollingBack);
+                rollbackSucceeded = await TryRollbackAsync(desktop, changed, previous).ConfigureAwait(false);
+                state.TryTransition(rollbackSucceeded ? WallpaperTransactionState.Cancelled : WallpaperTransactionState.RollbackFailed);
+                PublishTransaction(generation, state.Current, started, DateTime.UtcNow, applied, expected, retries, rollbackSucceeded, rollbackSucceeded ? "壁纸事务已取消并回滚" : "壁纸事务取消且回滚失败");
+            }
+            else
+            {
+                state.TryTransition(WallpaperTransactionState.Cancelled);
+                PublishTransaction(generation, state.Current, started, DateTime.UtcNow, applied, expected, retries, rollbackSucceeded, "壁纸事务已取消");
+            }
+            return new ApplyResult(false, rollbackSucceeded ? "壁纸事务已取消并回滚" : "壁纸事务已取消", applied);
         }
         catch (COMException ex)
         {
@@ -158,6 +168,28 @@ public sealed class WallpaperApplyService
         var status = new WallpaperTransactionStatus(generation, state, started, completed, applied, expected, retries, rollbackSucceeded, message);
         _lastTransaction = status;
         try { TransactionChanged?.Invoke(this, status); } catch { /* telemetry must never break wallpaper recovery */ }
+    }
+
+    private static async Task<bool> TryRollbackAsync(IDesktopWallpaper desktop, IReadOnlyList<string> changed, IReadOnlyDictionary<string, string> previous)
+    {
+        var success = true;
+        foreach (var path in changed.AsEnumerable().Reverse())
+        {
+            if (!previous.TryGetValue(path, out var old) || string.IsNullOrWhiteSpace(old)) continue;
+            var restored = false;
+            for (var attempt = 0; attempt < 3 && !restored; attempt++)
+            {
+                try
+                {
+                    desktop.SetWallpaper(path, old);
+                    await Task.Delay(120 * (attempt + 1)).ConfigureAwait(false);
+                    restored = string.Equals(desktop.GetWallpaper(path), old, StringComparison.OrdinalIgnoreCase);
+                }
+                catch (COMException) when (attempt < 2) { }
+            }
+            success &= restored;
+        }
+        return success;
     }
 
     private static string Resolve(WallpaperAsset asset, DataPaths paths)
