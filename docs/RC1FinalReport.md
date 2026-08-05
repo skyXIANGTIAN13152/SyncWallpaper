@@ -1,13 +1,13 @@
 # RC1 最终 27 项报告
 
-1. 实际开始时间：2026-08-05 12:38:04 +10:00（2026-08-05 02:38:04Z）。
-2. 实际结束时间：以最终提交前的最后一次门禁时间为准；最终回复会给出精确值。
-3. 实际工作时长：从上述开始时间按墙上时钟计算；不把加速测试折算为时间。
+1. 实际开始时间：2026-08-05T12:38:04.0299936+10:00（2026-08-05T02:38:04.0299936Z）。
+2. 实际结束时间：2026-08-05T13:24:39.9772532+10:00（2026-08-05T03:24:39.9793206Z）。
+3. 实际工作时长：46 分 35.9472596 秒（按墙上时钟；不把加速测试折算为时间）。
 4. 真实 soak 经过时间：60.6 秒 active monotonic，13 个样本，sleep excluded 0 秒；12 小时资格为 false。
 5. 加速压力测试事件数量：100,000，稳定输出 1 次，174.5 ms。
 6. 当前分支：release/1.0.0-rc1。
-7. 当前 commit hash：以最终回复给出的 git HEAD 为准。
-8. commit 列表：554f123 Beta 1.0.0 baseline；1e29f6f RC1 harden topology and wallpaper transactions；3fe829e RC1 add hardware validation and recovery safeguards；3e21828 RC1 add recovery tools and release packaging；后续门禁提交。
+7. 当前 commit hash：17825c46e6365fe77d54e32ee695a933701a4fa7。
+8. commit 列表：554f123 Beta 1.0.0 baseline；1e29f6f RC1 harden topology and wallpaper transactions；3fe829e RC1 add hardware validation and recovery safeguards；3e21828 RC1 add recovery tools and release packaging；94a1698 RC1 finalize validation reports and release metadata；35577de RC1 rollback cancelled wallpaper transactions；17825c4 RC1 stop scoped processes during uninstall。
 9. 新增和修改文件：硬件验收工具、脱敏/快照模型、TopologyCoordinator、壁纸状态机、挂起恢复、Explorer 被动恢复、混合 DPI、安全模式、5 点备份、安装脚本、RC1 文档和测试。
 10. 构建结果：Release 和 Debug 全量构建均 0 警告、0 错误；解决方案含 13 个项目。
 11. 单元测试结果：125/125 通过。
@@ -30,9 +30,9 @@
 18. 线程数：记录于诊断 JSON；长时 UI/硬件线程矩阵仍未验证。
 19. 句柄数：自身 284–361；测试宿主独立记录。
 20. 12 小时前后资源变化：Not Run；短测不冒充 12 小时。
-21. 发布包完整路径：artifacts/publish/win-x64 与 artifacts/publish/win-x64-selfcontained。
-22. 安装包完整路径：artifacts/publish/SyncWallpaper-1.0.0-rc.1-win-x64.zip；当前用户安装脚本为 install.ps1。
-23. SHA-256：同名 zip.sha256 文件；发布包 unsigned，manifest signed=false。
+21. 发布包完整路径：`C:\Users\z\Documents\Codex\2026-08-04\zu\artifacts\publish\win-x64` 与 `C:\Users\z\Documents\Codex\2026-08-04\zu\artifacts\publish\win-x64-selfcontained`。
+22. 安装包完整路径：`C:\Users\z\Documents\Codex\2026-08-04\zu\artifacts\publish\SyncWallpaper-1.0.0-rc.1-win-x64.zip`；当前用户安装脚本为 `install.ps1`。
+23. SHA-256：每个 ZIP 旁边的同名 `.sha256` 文件为发布校验值（最终值同时在交付回复中列出）；发布包 unsigned，manifest signed=false。
 24. 已知限制：真实 Explorer/睡眠/Win10/混合 DPI/物理热插拔、完整 Taskbar/Shell/Remote/Online 功能未达到 Verified。
 25. 尚未完成或无法执行的项目：需要用户物理操作或不同 Windows 会话的所有门禁继续保持 Not Run，不自动改变系统状态。
 26. 从 Beta 1.0.0 到 RC1 的核心变化：正式 Git/分支、事务状态与 generation、单一拓扑协调、独立 21 步硬件验收、脱敏导出、被动 Explorer 恢复、挂起恢复模型、混合 DPI 验证、5 点配置恢复、安全模式、安装/升级/卸载和 SHA256 发布。
