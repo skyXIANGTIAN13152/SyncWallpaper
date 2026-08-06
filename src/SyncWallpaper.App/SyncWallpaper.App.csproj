@@ -21,6 +21,7 @@
     <ProjectReference Include="..\SyncWallpaper.WindowEngine\SyncWallpaper.WindowEngine.csproj" />
     <ProjectReference Include="..\SyncWallpaper.Automation\SyncWallpaper.Automation.csproj" />
     <ProjectReference Include="..\SyncWallpaper.DesktopEngine\SyncWallpaper.DesktopEngine.csproj" />
+    <ProjectReference Include="..\SyncWallpaper.Update.Core\SyncWallpaper.Update.Core.csproj" />
   </ItemGroup>
 
 </Project>

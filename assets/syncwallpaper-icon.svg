@@ -1,16 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
-  <title id="title">屏序 SyncWallpaper</title>
-  <desc id="desc">Two cyan monitor outlines connected by a purple orbit on a deep navy background.</desc>
+  <title id="title">屏序 SyncWallpaper taskbar icon</title>
+  <desc id="desc">A cyan observation ring containing a desktop monitor and a laptop, based on the supplied taskbar reference.</desc>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#071426"/><stop offset="1" stop-color="#160d32"/></linearGradient>
-    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#65f5ff"/><stop offset="1" stop-color="#1689ff"/></linearGradient>
-    <linearGradient id="purple" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#a855f7"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#67F6FF"/><stop offset="0.55" stop-color="#20D7FF"/><stop offset="1" stop-color="#1689FF"/></linearGradient>
   </defs>
-  <rect x="8" y="8" width="240" height="240" rx="48" fill="url(#bg)" stroke="#173c62" stroke-width="4"/>
-  <path d="M28 136c18-59 71-83 113-48 35 29 62 28 87-8" fill="none" stroke="url(#purple)" stroke-width="8" stroke-linecap="round" opacity=".9"/>
-  <rect x="33" y="61" width="111" height="74" rx="8" fill="#081b31" stroke="url(#cyan)" stroke-width="7"/>
-  <path d="M62 154h52M72 136v18m32-18v18" stroke="#58eaff" stroke-width="6" stroke-linecap="round"/>
-  <rect x="157" y="80" width="66" height="112" rx="8" fill="#081b31" stroke="url(#cyan)" stroke-width="7"/>
-  <path d="M175 207h30" stroke="#58eaff" stroke-width="6" stroke-linecap="round"/>
-  <circle cx="182" cy="46" r="7" fill="#65f5ff"/><circle cx="217" cy="151" r="6" fill="#a855f7"/>
+  <circle cx="128" cy="128" r="93" fill="none" stroke="#126A9F" stroke-width="9" opacity=".75"/>
+  <path d="M128 35a93 93 0 0 1 82 49" fill="none" stroke="url(#cyan)" stroke-width="9" stroke-linecap="round"/>
+  <path d="M65 207a93 93 0 0 0 111 20" fill="none" stroke="url(#cyan)" stroke-width="9" stroke-linecap="round" stroke-dasharray="7 14"/>
+  <rect x="61" y="96" width="100" height="69" rx="10" fill="#071426" stroke="url(#cyan)" stroke-width="8"/>
+  <path d="M111 165v20M88 185h46" stroke="url(#cyan)" stroke-width="8" stroke-linecap="round"/>
+  <rect x="143" y="126" width="72" height="58" rx="9" fill="#071426" stroke="url(#cyan)" stroke-width="8"/>
+  <path d="M151 195h60" stroke="url(#cyan)" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="83" cy="213" r="12" fill="#67F6FF"/>
+  <circle cx="201" cy="52" r="7" fill="#67F6FF"/>
 </svg>

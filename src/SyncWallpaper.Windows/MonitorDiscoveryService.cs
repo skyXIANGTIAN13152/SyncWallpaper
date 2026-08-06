@@ -67,6 +67,13 @@ public sealed class MonitorDiscoveryService
             var refresh = targetMode.targetVideoSignalInfo.vSyncFreq;
             var nativeWidth = targetMode.targetVideoSignalInfo.activeSize.cx;
             var nativeHeight = targetMode.targetVideoSignalInfo.activeSize.cy;
+            var rotation = path.targetInfo.rotation == 0 ? 1 : (int)path.targetInfo.rotation;
+            var hasSourceSize = sourceMode.width > 0 && sourceMode.height > 0;
+            var sourceWidth = hasSourceSize ? (int)sourceMode.width : Math.Abs(bounds.Width);
+            var sourceHeight = hasSourceSize ? (int)sourceMode.height : Math.Abs(bounds.Height);
+            var isQuarterTurn = rotation is 2 or 4;
+            var desktopWidth = hasSourceSize && isQuarterTurn ? sourceHeight : sourceWidth;
+            var desktopHeight = hasSourceSize && isQuarterTurn ? sourceWidth : sourceHeight;
             var screen = FindScreen(screens, windowsDisplayName);
             var identity = new MonitorIdentity
             {
@@ -87,13 +94,19 @@ public sealed class MonitorDiscoveryService
                 OutputTechnology = unchecked((uint)target.OutputTechnology),
                 ConnectorInstance = target.ConnectorInstance,
                 IsInternal = IsInternalTechnology(unchecked((uint)target.OutputTechnology)),
-                Width = sourceMode.width > 0 ? (int)sourceMode.width : Math.Abs(bounds.Width),
-                Height = sourceMode.height > 0 ? (int)sourceMode.height : Math.Abs(bounds.Height),
+                // Source mode is expressed before the target rotation. The
+                // dimensions shown to the user and used for geometry must be
+                // the resulting desktop dimensions (swap on 90/270 degrees).
+                Width = desktopWidth,
+                Height = desktopHeight,
                 NativeWidth = (int)nativeWidth,
                 NativeHeight = (int)nativeHeight,
                 RefreshRateNumerator = refresh.Numerator,
                 RefreshRateDenominator = refresh.Denominator == 0 ? 1u : refresh.Denominator,
-                Rotation = targetMode.rotation == 0 ? 1 : (int)targetMode.rotation,
+                // Rotation belongs to DISPLAYCONFIG_PATH_TARGET_INFO.  It is
+                // not part of DISPLAYCONFIG_TARGET_MODE; reading it from the
+                // mode union made every monitor appear as direction 1.
+                Rotation = rotation,
                 DesktopX = sourceMode.width > 0 ? sourceMode.position.x : bounds.Left,
                 DesktopY = sourceMode.height > 0 ? sourceMode.position.y : bounds.Top,
                 IsPrimary = screen?.Primary == true,
@@ -181,7 +194,7 @@ public sealed class MonitorDiscoveryService
     private static DISPLAYCONFIG_TARGET_MODE FindTargetMode(uint index, DISPLAYCONFIG_MODE_INFO[] modes)
     {
         if (index < modes.Length && modes[index].infoType == ModeInfoTypeTarget) return modes[index].targetMode;
-        return new DISPLAYCONFIG_TARGET_MODE { rotation = 1 };
+        return new DISPLAYCONFIG_TARGET_MODE();
     }
 
     private static WmiInfo FindWmi(string path, string friendly, IReadOnlyList<WmiInfo> all)
@@ -303,8 +316,10 @@ public sealed class MonitorDiscoveryService
         public ulong pixelRate; public DISPLAYCONFIG_RATIONAL hSyncFreq; public DISPLAYCONFIG_RATIONAL vSyncFreq;
         public DISPLAYCONFIG_2DREGION activeSize; public DISPLAYCONFIG_2DREGION totalSize; public uint videoStandard; public uint scanLineOrdering;
     }
-    [StructLayout(LayoutKind.Sequential)] private struct DISPLAYCONFIG_TARGET_MODE { public DISPLAYCONFIG_VIDEO_SIGNAL_INFO targetVideoSignalInfo; public uint rotation; public uint scaling; }
-    [StructLayout(LayoutKind.Sequential)] private struct DISPLAYCONFIG_SOURCE_MODE { public uint width; public uint height; public uint pixelFormat; public POINTL position; public uint rotation; public uint scaling; }
+    // These mode structures mirror the Windows CCD ABI. Rotation and scaling
+    // are fields of DISPLAYCONFIG_PATH_TARGET_INFO, not mode records.
+    [StructLayout(LayoutKind.Sequential)] private struct DISPLAYCONFIG_TARGET_MODE { public DISPLAYCONFIG_VIDEO_SIGNAL_INFO targetVideoSignalInfo; }
+    [StructLayout(LayoutKind.Sequential)] private struct DISPLAYCONFIG_SOURCE_MODE { public uint width; public uint height; public uint pixelFormat; public POINTL position; }
     [StructLayout(LayoutKind.Sequential)] private struct DISPLAYCONFIG_PATH_SOURCE_INFO { public LUID adapterId; public uint id; public uint modeInfoIdx; public uint statusFlags; }
     [StructLayout(LayoutKind.Sequential)] private struct DISPLAYCONFIG_PATH_TARGET_INFO { public LUID adapterId; public uint id; public uint modeInfoIdx; public uint outputTechnology; public uint rotation; public uint scaling; public DISPLAYCONFIG_RATIONAL refreshRate; public uint scanLineOrdering; public bool targetAvailable; public uint statusFlags; }
     [StructLayout(LayoutKind.Sequential)] private struct DISPLAYCONFIG_PATH_INFO { public DISPLAYCONFIG_PATH_SOURCE_INFO sourceInfo; public DISPLAYCONFIG_PATH_TARGET_INFO targetInfo; public uint flags; }

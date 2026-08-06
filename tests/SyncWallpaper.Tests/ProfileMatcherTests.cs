@@ -54,6 +54,24 @@ public class ProfileMatcherTests
         Assert.AreEqual(MatchStatus.Exact, result.Status);
     }
 
+    [TestMethod]
+    public void SameTopology_CanSelectTheHigherPriorityWallpaperCombination()
+    {
+        var monitor = Monitor("TMA", "0803", "L-1", "L", 0, true);
+        var morning = Profile("晨间壁纸", ("Laptop", monitor));
+        morning.Priority = 100;
+        morning.Roles[0].WallpaperAssetId = "morning";
+        var evening = Profile("夜间壁纸", ("Laptop", monitor));
+        evening.Priority = 200;
+        evening.Roles[0].WallpaperAssetId = "evening";
+
+        var result = new ProfileMatcher().Match(new[] { monitor.Clone() }, new[] { morning, evening });
+
+        Assert.AreEqual(MatchStatus.Exact, result.Status);
+        Assert.AreEqual("夜间壁纸", result.Profile?.Name);
+        Assert.AreEqual("evening", result.Profile?.Roles[0].WallpaperAssetId);
+    }
+
     private static MonitorIdentity Monitor(string manufacturer, string product, string serial, string path, int x, bool internalDisplay = false) => new()
     {
         ManufacturerName = manufacturer, ProductCodeId = product, EdidManufactureId = manufacturer, EdidProductCodeId = product,

@@ -30,8 +30,8 @@
 18. 线程数：记录于诊断 JSON；长时 UI/硬件线程矩阵仍未验证。
 19. 句柄数：自身 284–361；测试宿主独立记录。
 20. 12 小时前后资源变化：Not Run；短测不冒充 12 小时。
-21. 发布包完整路径：`C:\Users\z\Documents\Codex\2026-08-04\zu\artifacts\publish\win-x64` 与 `C:\Users\z\Documents\Codex\2026-08-04\zu\artifacts\publish\win-x64-selfcontained`。
-22. 安装包完整路径：`C:\Users\z\Documents\Codex\2026-08-04\zu\artifacts\publish\SyncWallpaper-1.0.0-rc.1-win-x64.zip`；当前用户安装脚本为 `install.ps1`。
+21. 发布包输出目录：`artifacts/publish/win-x64` 与 `artifacts/publish/win-x64-selfcontained`（工作区相对路径；本目录被 `.gitignore` 忽略）。
+22. 安装包输出：`artifacts/publish/SyncWallpaper-1.0.0-rc.1-win-x64.zip`；当前用户安装脚本为 `install.ps1`。历史报告中的本机绝对路径已移除。
 23. SHA-256：每个 ZIP 旁边的同名 `.sha256` 文件为发布校验值（最终值同时在交付回复中列出）；发布包 unsigned，manifest signed=false。
 24. 已知限制：真实 Explorer/睡眠/Win10/混合 DPI/物理热插拔、完整 Taskbar/Shell/Remote/Online 功能未达到 Verified。
 25. 尚未完成或无法执行的项目：需要用户物理操作或不同 Windows 会话的所有门禁继续保持 Not Run，不自动改变系统状态。

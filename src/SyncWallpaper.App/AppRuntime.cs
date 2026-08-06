@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using SyncWallpaper.AudioEngine;
 using SyncWallpaper.Automation;
@@ -8,6 +9,7 @@ using SyncWallpaper.DesktopEngine;
 using SyncWallpaper.DisplayEngine;
 using SyncWallpaper.WindowEngine;
 using SyncWallpaper.Windows;
+using SyncWallpaper.Update.Core;
 using CoreRect = SyncWallpaper.Core.Int32Rect;
 
 namespace SyncWallpaper.App;
@@ -35,9 +37,21 @@ public sealed class AppRuntime : IDisposable
     public WindowRestoreResult? LastWindowRestore { get; private set; }
     public DesktopIconRestoreResult? LastDesktopRestore { get; private set; }
     public IReadOnlyList<AutomationExecutionResult> LastAutomationResults { get; private set; } = Array.Empty<AutomationExecutionResult>();
+    public UpdateCheckResult? LastUpdateResult { get; private set; }
+    public string CurrentVersion => CurrentVersionProvider.GetInformationalVersion(typeof(App).Assembly);
     public string StatusText { get; private set; } = "正在启动";
     public string LastMessage { get; private set; } = "等待显示器检测";
     public DateTime? LastAppliedAt { get; private set; }
+    /// <summary>True only while a stable display topology is being classified/applied.</summary>
+    public bool IsRecognizing { get; private set; }
+    public TrayIconState TrayVisualState => IsRecognizing
+        ? TrayIconState.Recognizing
+        : !Settings.AutoMatchEnabled || StatusText is "已暂停" or "安全模式"
+            || StatusText.StartsWith("验证模式", StringComparison.Ordinal)
+            ? TrayIconState.Paused
+            : StatusText is "需要确认" or "保持当前壁纸" or "应用未完成" or "应用失败" or "未发现显示器"
+                ? TrayIconState.Error
+                : TrayIconState.Normal;
     public ModuleManager Modules { get; }
     public event EventHandler? StateChanged;
 
@@ -75,16 +89,31 @@ public sealed class AppRuntime : IDisposable
     private bool _sessionAutoMatchSuppressed;
     private readonly DateTime _createdAt = DateTime.UtcNow;
     private string _lastWindowEvent = "尚未收到窗口事件";
+    private readonly HttpClient _updateHttpClient;
+    private readonly GitHubReleaseChecker _releaseChecker;
+    private readonly SemaphoreSlim _updateGate = new(1, 1);
+    private readonly CancellationTokenSource _updateLifetime = new();
 
     public AppRuntime()
     {
-        Paths = new DataPaths();
+        var dataRoot = ResolveStorageRoot();
+        MigrateLegacyStorage(dataRoot);
+        Paths = new DataPaths(dataRoot);
         Store = new ConfigurationStore(Paths);
         Settings = Store.Load("settings.json", new AppSettings());
         var loadedProfiles = Store.Load("profiles.json", new ProfilesDocument());
         var loadedProfilesSchema = loadedProfiles.SchemaVersion;
         Profiles = ProfileSchemaMigrator.Migrate(loadedProfiles);
         Library = Store.Load("library.json", new LibraryDocument());
+        var libraryChanged = RestoreMissingAssetsFromSourceFolders(Library, Paths.Root);
+        var profilesChanged = NormalizeWallpaperBindings(Profiles, Library, Paths.Root);
+        if (libraryChanged) Store.Save("library.json", Library);
+        if (profilesChanged) Store.Save("profiles.json", Profiles);
+        if (!string.Equals(Settings.DataRoot, Paths.Root, StringComparison.OrdinalIgnoreCase))
+        {
+            Settings.DataRoot = Paths.Root;
+            Store.Save("settings.json", Settings);
+        }
         MonitorProfiles = Store.Load("monitor-profiles.json", new MonitorProfilesDocument());
         WindowProfiles = Store.Load("window-profiles.json", new WindowPositionProfilesDocument());
         Triggers = Store.Load("triggers.json", new TriggerDocument());
@@ -96,12 +125,19 @@ public sealed class AppRuntime : IDisposable
         if (Settings.SafeMode) { Settings.AutoMatchEnabled = false; StatusText = "安全模式"; LastMessage = Settings.SafeModeReason; }
 
         _log = new LogService(Paths);
+        _updateHttpClient = new HttpClient();
+        _releaseChecker = new GitHubReleaseChecker(
+            _updateHttpClient,
+            ProjectLinks.RepositorySettings,
+            CurrentVersion,
+            TimeSpan.FromSeconds(15));
         if (loadedProfilesSchema < ProfileSchemaMigrator.CurrentSchemaVersion)
         {
             try { Store.Save("profiles.json", Profiles); _log.Info("Config", $"profiles.json 已迁移到 SchemaVersion={Profiles.SchemaVersion}"); }
             catch (Exception ex) { _log.Warn("Config", "保存迁移后的 profiles.json 失败：" + ex.Message); }
         }
         _library = new WallpaperLibraryService(Store);
+        Library = _library.Refresh().Document;
         _apply = new WallpaperApplyService(new WallpaperRenderService(Paths), message => _log.Write("Wallpaper", message));
         _explorerRecovery = new ExplorerRecoveryCoordinator(
             async token => { if (token.IsCancellationRequested) return; await MatchAndApplyAsync(); },
@@ -387,7 +423,100 @@ public sealed class AppRuntime : IDisposable
         }
         StatusText = _sessionAutoMatchSuppressed ? "验证模式（不自动应用壁纸）" : "监测中";
         _coordinator.Start();
+        if (Settings.AutomaticUpdateCheckEnabled && ProjectLinks.IsConfigured)
+            _ = ScheduleAutomaticUpdateCheckAsync();
         RaiseChanged();
+    }
+
+    public async Task<UpdateCheckResult> CheckForUpdatesAsync(bool manual = true, CancellationToken cancellationToken = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var settings = new UpdateCheckSettings
+        {
+            AutomaticCheckEnabled = Settings.AutomaticUpdateCheckEnabled,
+            Channel = ParseUpdateChannel(Settings.UpdateChannel),
+            LastSuccessfulCheckUtc = Settings.LastUpdateSuccessfulCheckUtc,
+            LastAttemptUtc = Settings.LastUpdateAttemptUtc
+        };
+        if (!manual && !UpdateCheckScheduler.ShouldRunAutomaticCheck(settings, now))
+        {
+            return LastUpdateResult ?? new UpdateCheckResult(UpdateCheckStatus.UpToDate, null, null, null, null, null, null,
+                "自动更新检查尚未到期。", "七天检查间隔尚未到期。");
+        }
+
+        await _updateGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            now = DateTimeOffset.UtcNow;
+            Settings.LastUpdateAttemptUtc = now;
+            TrySaveSettings();
+            RaiseChanged();
+            var result = await _releaseChecker.CheckAsync(settings.Channel, cancellationToken).ConfigureAwait(false);
+            LastUpdateResult = result;
+            UpdateCheckScheduler.RecordResult(settings, result, DateTimeOffset.UtcNow);
+            Settings.LastUpdateAttemptUtc = settings.LastAttemptUtc;
+            Settings.LastUpdateSuccessfulCheckUtc = settings.LastSuccessfulCheckUtc;
+            TrySaveSettings();
+            if (result.IsSuccess)
+                _log.Info("Update", result.UserMessage ?? "GitHub Release 检查完成。");
+            else if (manual)
+                _log.Warn("Update", result.TechnicalMessage ?? result.UserMessage ?? "GitHub Release 检查失败。");
+            RaiseChanged();
+            return result;
+        }
+        catch (OperationCanceledException)
+        {
+            var cancelled = new UpdateCheckResult(UpdateCheckStatus.Cancelled, null, null, null, null, null, null,
+                "已取消更新检查。", "调用方取消了请求。");
+            LastUpdateResult = cancelled;
+            RaiseChanged();
+            return cancelled;
+        }
+        finally { _updateGate.Release(); }
+    }
+
+    public bool OpenReleasePage(Uri? releaseUrl = null)
+    {
+        var url = releaseUrl ?? ProjectLinks.LatestRelease;
+        if (!ReleaseUrlValidator.IsAllowed(url, ProjectLinks.RepositorySettings)) return false;
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = url!.ToString(), UseShellExecute = true });
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("Update", "打开 GitHub Release 失败：" + ex.Message);
+            return false;
+        }
+    }
+
+    public void SaveUpdateSettings()
+    {
+        Settings.UpdateChannel = ParseUpdateChannel(Settings.UpdateChannel).ToString();
+        TrySaveSettings();
+    }
+
+    private async Task ScheduleAutomaticUpdateCheckAsync()
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(2), _updateLifetime.Token).ConfigureAwait(false);
+            if (!_updateLifetime.IsCancellationRequested)
+                await CheckForUpdatesAsync(false, _updateLifetime.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { _log.Warn("Update", "自动更新检查失败（已静默处理）：" + ex.Message); }
+    }
+
+    private static UpdateChannel ParseUpdateChannel(string? value)
+        => string.Equals(value, nameof(UpdateChannel.Beta), StringComparison.OrdinalIgnoreCase)
+            ? UpdateChannel.Beta : UpdateChannel.Stable;
+
+    private void TrySaveSettings()
+    {
+        try { Store.Save("settings.json", Settings); }
+        catch (Exception ex) { _log.Warn("Config", "保存更新检查设置失败：" + ex.Message); }
     }
 
     private void SeedLocalLibraryAndProfiles()
@@ -490,6 +619,18 @@ public sealed class AppRuntime : IDisposable
     }
 
     private async Task OnStableDisplaysAsync(DisplaySnapshot snapshot)
+    {
+        IsRecognizing = true;
+        RaiseChanged();
+        try { await ProcessStableDisplaysAsync(snapshot); }
+        finally
+        {
+            IsRecognizing = false;
+            RaiseChanged();
+        }
+    }
+
+    private async Task ProcessStableDisplaysAsync(DisplaySnapshot snapshot)
     {
         Monitors = snapshot.Monitors;
         if (!string.IsNullOrWhiteSpace(_discovery.LastError))
@@ -935,6 +1076,229 @@ public sealed class AppRuntime : IDisposable
         catch (Exception ex) { _log.Write("Error", "导入壁纸失败：" + ex.Message); }
     }
 
+    /// <summary>
+    /// Saves the currently connected display topology as a new wallpaper
+    /// combination.  The monitor fingerprints are copied from the current
+    /// native topology and the wallpaper bindings are copied from the current
+    /// match/active profile.  A topology which is still ambiguous is refused
+    /// rather than being silently assigned by geometry.
+    /// </summary>
+    public WallpaperProfile SaveCurrentWallpaperProfile(string? name)
+    {
+        if (Monitors.Count == 0) Monitors = _discovery.Discover();
+        if (Monitors.Count == 0)
+            throw new InvalidOperationException("当前没有活动显示器，无法保存壁纸组合。");
+        if (LastMatch?.Status == MatchStatus.Ambiguous)
+            throw new InvalidOperationException("当前显示器组合仍有歧义。请先完成 A / B / C 显示器识别，再保存壁纸组合。");
+
+        var sourceProfile = LastMatch?.Profile
+            ?? Profiles.Profiles.FirstOrDefault(x => string.Equals(x.Id, Settings.ActiveProfileId, StringComparison.OrdinalIgnoreCase));
+        var assignments = new List<(MonitorIdentity Monitor, string Role, MonitorRoleBinding? Source)>();
+        var usedRoles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var monitor in Monitors)
+        {
+            var role = FindMappedRole(LastMatch, monitor);
+            if (string.IsNullOrWhiteSpace(role))
+                role = monitor.IsInternal ? "Laptop" : monitor.Width >= monitor.Height ? "Landscape" : "Portrait";
+
+            // Geometry is only a fallback for unique roles.  Two same-shaped
+            // displays without an explicit role must be confirmed by the user.
+            if (!usedRoles.Add(role))
+                throw new InvalidOperationException("当前有多个显示器无法唯一分配逻辑角色。请先打开“显示器识别”手动确认后再保存。");
+            var source = sourceProfile?.Roles.FirstOrDefault(x => x.Role.Equals(role, StringComparison.OrdinalIgnoreCase));
+            assignments.Add((monitor, role, source));
+        }
+
+        var now = DateTime.UtcNow;
+        var profile = new WallpaperProfile
+        {
+            Name = string.IsNullOrWhiteSpace(name) ? $"{Monitors.Count}屏组合 {now.ToLocalTime():MM-dd HHmm}" : name.Trim(),
+            Combination = Monitors.Count == 1 ? DisplayCombinationKind.LaptopOnly : Monitors.Count == 3 ? DisplayCombinationKind.ThreeMonitorSetup : DisplayCombinationKind.Custom,
+            ExpectedMonitorCount = Monitors.Count,
+            CreatedAt = now,
+            ModifiedAt = now,
+            AutoApply = true,
+            AllowCompatibleMatch = true,
+            MinimumConfidence = 80,
+            Priority = Profiles.Profiles.Count == 0 ? 100 : Profiles.Profiles.Max(x => x.Priority) + 10
+        };
+
+        foreach (var assignment in assignments)
+        {
+            var source = assignment.Source;
+            var asset = source is null || string.IsNullOrWhiteSpace(source.WallpaperAssetId)
+                ? null
+                : Library.Assets.FirstOrDefault(x => x.Id.Equals(source.WallpaperAssetId, StringComparison.OrdinalIgnoreCase));
+            var wallpaperPath = asset is not null
+                ? ManagedAssetPath(asset, Paths.Root)
+                : source?.WallpaperPath ?? string.Empty;
+            profile.Roles.Add(new MonitorRoleBinding
+            {
+                Role = assignment.Role,
+                DisplayName = source?.DisplayName ?? RoleDisplayName(assignment.Role),
+                Fingerprint = assignment.Monitor.Clone(),
+                WallpaperAssetId = asset?.Id ?? source?.WallpaperAssetId ?? string.Empty,
+                WallpaperPath = wallpaperPath,
+                FitMode = source?.FitMode ?? WallpaperFitMode.Fill,
+                BackgroundColor = source?.BackgroundColor ?? "#050B18",
+                AllowAutoRebind = source?.AllowAutoRebind ?? false,
+                LastKnownMonitorDevicePath = assignment.Monitor.MonitorDevicePath,
+                Notes = "用户保存的显示器组合"
+            });
+        }
+
+        Profiles.Profiles.Add(profile);
+        Settings.ActiveProfileId = profile.Id;
+        Store.Save("profiles.json", Profiles);
+        Store.Save("settings.json", Settings);
+        LastMessage = $"已保存壁纸组合“{profile.Name}”：{profile.Roles.Count} 台显示器";
+        _log.Info("Config", LastMessage);
+        RaiseChanged();
+        return profile;
+    }
+
+    /// <summary>Applies one saved wallpaper combination to the current topology.</summary>
+    public async Task<bool> ApplyWallpaperProfileAsync(string profileId)
+    {
+        if (Monitors.Count == 0) Monitors = _discovery.Discover();
+        var profile = Profiles.Profiles.FirstOrDefault(x => x.Id.Equals(profileId, StringComparison.OrdinalIgnoreCase));
+        if (profile is null) { LastMessage = "找不到所选壁纸组合"; RaiseChanged(); return false; }
+        if (Monitors.Count == 0) { StatusText = "未发现显示器"; LastMessage = "没有活动显示器"; RaiseChanged(); return false; }
+
+        // Selecting a saved profile is an explicit user choice.  Give it the
+        // highest priority so an identical topology does not immediately
+        // switch back to another saved wallpaper set.
+        profile.Priority = Profiles.Profiles.Count == 0 ? 100 : Profiles.Profiles.Max(x => x.Priority) + 1;
+        profile.ModifiedAt = DateTime.UtcNow;
+        Settings.ActiveProfileId = profile.Id;
+        Store.Save("profiles.json", Profiles);
+        Store.Save("settings.json", Settings);
+
+        LastMatch = _matcher.Match(Monitors, new[] { profile });
+        _log.Write("Match", $"用户选择壁纸组合：{profile.Name}；{LastMatch.Message}", profile.Name, Monitors.Count, LastMatch.Confidence);
+        if (LastMatch.Status == MatchStatus.Ambiguous || LastMatch.Status == MatchStatus.NoMatch || !LastMatch.CanAutoApply)
+        {
+            StatusText = LastMatch.Status == MatchStatus.Ambiguous ? "需要确认" : "保持当前壁纸";
+            LastMessage = LastMatch.Message;
+            RaiseChanged();
+            return false;
+        }
+
+        try
+        {
+            var result = await RunOnDispatcherAsync(() => _apply.ApplyAsync(LastMatch, Library.Assets, Paths, generation: _coordinator.Generation, manual: true));
+            LastMessage = result.Message;
+            StatusText = result.Success ? "运行中" : "应用未完成";
+            if (result.Success) RecordSuccessfulWallpaperMatch(LastMatch);
+            RaiseChanged();
+            return result.Success;
+        }
+        catch (Exception ex)
+        {
+            StatusText = "应用失败";
+            LastMessage = ex.Message;
+            _log.Write("Error", ex.ToString());
+            RaiseChanged();
+            return false;
+        }
+    }
+
+    /// <summary>Renames a saved wallpaper combination without changing its bindings.</summary>
+    public bool RenameWallpaperProfile(string profileId, string? name)
+    {
+        var trimmed = name?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+            throw new ArgumentException("组合名称不能为空。", nameof(name));
+        var profile = Profiles.Profiles.FirstOrDefault(x => x.Id.Equals(profileId, StringComparison.OrdinalIgnoreCase));
+        if (profile is null) return false;
+        if (profile.Name.Equals(trimmed, StringComparison.Ordinal)) return true;
+        profile.Name = trimmed;
+        profile.ModifiedAt = DateTime.UtcNow;
+        Store.Save("profiles.json", Profiles);
+        LastMessage = $"已重命名壁纸组合为“{profile.Name}”";
+        _log.Info("Config", LastMessage);
+        RaiseChanged();
+        return true;
+    }
+
+    /// <summary>Deletes a saved wallpaper combination and repairs the active-profile pointer.</summary>
+    public bool DeleteWallpaperProfile(string profileId)
+    {
+        var index = Profiles.Profiles.FindIndex(x => x.Id.Equals(profileId, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) return false;
+        var removed = Profiles.Profiles[index];
+        Profiles.Profiles.RemoveAt(index);
+        if (string.Equals(Settings.ActiveProfileId, removed.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            Settings.ActiveProfileId = Profiles.Profiles
+                .Where(x => x.Enabled)
+                .OrderByDescending(x => x.Priority)
+                .ThenByDescending(x => x.ModifiedAt)
+                .Select(x => (string?)x.Id)
+                .FirstOrDefault();
+            LastMatch = null;
+        }
+        Store.Save("profiles.json", Profiles);
+        Store.Save("settings.json", Settings);
+        LastMessage = $"已删除壁纸组合“{removed.Name}”";
+        _log.Info("Config", LastMessage);
+        RaiseChanged();
+        return true;
+    }
+
+    private static string? FindMappedRole(MatchResult? match, MonitorIdentity monitor)
+    {
+        if (match is null) return null;
+        return match.RoleMatches.FirstOrDefault(x =>
+            (!string.IsNullOrWhiteSpace(monitor.MonitorDevicePath) && x.Value.MonitorDevicePath.Equals(monitor.MonitorDevicePath, StringComparison.OrdinalIgnoreCase))
+            || (!string.IsNullOrWhiteSpace(monitor.StableId) && x.Value.StableId.Equals(monitor.StableId, StringComparison.OrdinalIgnoreCase))
+            || (monitor.HasUsableSerial && x.Value.HasUsableSerial && x.Value.SerialKey.Equals(monitor.SerialKey, StringComparison.OrdinalIgnoreCase))).Key;
+    }
+
+    private static string RoleDisplayName(string role) => role switch
+    {
+        "Laptop" => "笔记本本体",
+        "Landscape" => "横屏1",
+        "Portrait" => "竖屏1",
+        _ => role
+    };
+
+    private void RecordSuccessfulWallpaperMatch(MatchResult match)
+    {
+        LastAppliedAt = DateTime.Now;
+        if (match.Profile is null) return;
+        match.Profile.LastAppliedAt = DateTime.UtcNow;
+        match.Profile.LastSuccessfulMatchAt = DateTime.UtcNow;
+        foreach (var role in match.Profile.Roles)
+        {
+            if (!match.RoleMatches.TryGetValue(role.Role, out var monitor)) continue;
+            role.LastSuccessfulMatchAt = DateTime.UtcNow;
+            role.LastKnownMonitorDevicePath = monitor.MonitorDevicePath;
+        }
+        Store.Save("profiles.json", Profiles);
+    }
+
+    public WallpaperLibraryRefreshResult RefreshLibrary()
+    {
+        try
+        {
+            var result = _library.Refresh();
+            Library = result.Document;
+            LastMessage = result.MissingCount == 0 && result.RecoveredCount == 0
+                ? $"档案库已刷新：{Library.Assets.Count(x => !x.IsMissing)} 个壁纸可用"
+                : $"档案库已刷新：隐藏 {result.MissingCount} 个不存在文件，恢复 {result.RecoveredCount} 个文件";
+            _log.Write("Library", LastMessage);
+            RaiseChanged();
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _log.Write("Error", "刷新档案库失败：" + ex.Message);
+            return new WallpaperLibraryRefreshResult(Library, 0, 0);
+        }
+    }
+
     public string StartupText => _startup.IsEnabled ? "已启用" : "未启用";
     public IReadOnlyList<DiagnosticEvent> RecentLogs => _log.Recent;
     public DiagnosticLaboratorySnapshot CaptureDiagnosticSnapshot()
@@ -984,8 +1348,146 @@ public sealed class AppRuntime : IDisposable
     }
     public void OpenFolder(string path) { Paths.Ensure(); Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true }); }
 
+    private static string ResolveStorageRoot()
+    {
+        var configured = Environment.GetEnvironmentVariable("SYNCWALLPAPER_DATA_ROOT");
+        if (!string.IsNullOrWhiteSpace(configured) && CanWriteToDirectory(configured))
+            return Path.GetFullPath(configured);
+
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            var isProjectRoot = File.Exists(Path.Combine(directory.FullName, "SyncWallpaper.sln"));
+            var isPackageRoot = File.Exists(Path.Combine(directory.FullName, "package-manifest.json"));
+            if ((isProjectRoot || isPackageRoot) && CanWriteToDirectory(directory.FullName))
+                return directory.FullName;
+        }
+
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SyncWallpaper");
+    }
+
+    private static bool CanWriteToDirectory(string path)
+    {
+        try
+        {
+            Directory.CreateDirectory(path);
+            var probe = Path.Combine(path, ".syncwallpaper-write-" + Guid.NewGuid().ToString("N"));
+            File.WriteAllText(probe, string.Empty);
+            File.Delete(probe);
+            return true;
+        }
+        catch { return false; }
+    }
+
+    private static void MigrateLegacyStorage(string targetRoot)
+    {
+        var legacyRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SyncWallpaper");
+        if (string.Equals(Path.GetFullPath(legacyRoot), Path.GetFullPath(targetRoot), StringComparison.OrdinalIgnoreCase)
+            || !Directory.Exists(legacyRoot)) return;
+
+        foreach (var sourceDirectory in Directory.EnumerateDirectories(legacyRoot))
+        {
+            var destinationDirectory = Path.Combine(targetRoot, Path.GetFileName(sourceDirectory));
+            CopyMissingFiles(sourceDirectory, destinationDirectory);
+        }
+    }
+
+    private static void CopyMissingFiles(string sourceDirectory, string destinationDirectory)
+    {
+        try
+        {
+            Directory.CreateDirectory(destinationDirectory);
+            foreach (var sourceFile in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories))
+            {
+                try
+                {
+                    var relative = Path.GetRelativePath(sourceDirectory, sourceFile);
+                    var destinationFile = Path.Combine(destinationDirectory, relative);
+                    Directory.CreateDirectory(Path.GetDirectoryName(destinationFile)!);
+                    if (!File.Exists(destinationFile)) File.Copy(sourceFile, destinationFile);
+                }
+                catch { /* A locked log/cache file must not block startup migration. */ }
+            }
+        }
+        catch { /* The normal local-app-data fallback remains available. */ }
+    }
+
+    private static bool RestoreMissingAssetsFromSourceFolders(LibraryDocument library, string root)
+    {
+        var folders = new[]
+        {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "wallpaper"),
+            Path.Combine(root, "wallpaper")
+        };
+        var changed = false;
+        foreach (var asset in library.Assets)
+        {
+            var destination = ManagedAssetPath(asset, root);
+            if (string.IsNullOrWhiteSpace(destination) || File.Exists(destination)) continue;
+            foreach (var folder in folders)
+            {
+                var source = Path.Combine(folder, asset.OriginalFileName);
+                if (!File.Exists(source)) continue;
+                try
+                {
+                    if (!string.Equals(FileUtilities.Sha256(source), asset.Sha256, StringComparison.OrdinalIgnoreCase)) continue;
+                    Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                    File.Copy(source, destination, true);
+                    changed = true;
+                    break;
+                }
+                catch { }
+            }
+        }
+        return changed;
+    }
+
+    private static bool NormalizeWallpaperBindings(ProfilesDocument profiles, LibraryDocument library, string root)
+    {
+        var changed = false;
+        foreach (var role in profiles.Profiles.SelectMany(x => x.Roles))
+        {
+            var asset = library.Assets.FirstOrDefault(x => !string.IsNullOrWhiteSpace(role.WallpaperAssetId)
+                && x.Id.Equals(role.WallpaperAssetId, StringComparison.OrdinalIgnoreCase));
+            var originalName = asset?.OriginalFileName ?? Path.GetFileName(role.WallpaperPath);
+            var assetPath = asset is null ? string.Empty : ManagedAssetPath(asset, root);
+            if (string.IsNullOrWhiteSpace(originalName)) continue;
+
+            if (asset is null || !File.Exists(assetPath))
+            {
+                var replacement = library.Assets
+                    .Where(x => string.Equals(x.OriginalFileName, originalName, StringComparison.OrdinalIgnoreCase)
+                        && File.Exists(ManagedAssetPath(x, root)))
+                    .OrderByDescending(x => x.ImportedAt)
+                    .FirstOrDefault();
+                if (replacement is not null && !replacement.Id.Equals(role.WallpaperAssetId, StringComparison.OrdinalIgnoreCase))
+                {
+                    asset = replacement;
+                    role.WallpaperAssetId = replacement.Id;
+                    changed = true;
+                }
+            }
+
+            if (asset is not null)
+            {
+                var expectedPath = ManagedAssetPath(asset, root);
+                if (!string.Equals(role.WallpaperPath, expectedPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    role.WallpaperPath = expectedPath;
+                    changed = true;
+                }
+            }
+        }
+        return changed;
+    }
+
+    private static string ManagedAssetPath(WallpaperAsset asset, string root)
+        => asset.StorageMode.Equals("External", StringComparison.OrdinalIgnoreCase)
+            ? asset.ExternalPath ?? string.Empty
+            : Path.Combine(root, asset.ManagedRelativePath.Replace('/', Path.DirectorySeparatorChar));
+
     public void Dispose()
     {
+        _updateLifetime.Cancel();
         _coordinator.Dispose();
         _explorerRecovery.Dispose();
         Modules.StateChanged -= Modules_StateChanged;
@@ -999,6 +1501,9 @@ public sealed class AppRuntime : IDisposable
         Store.Save("desktop-icons.json", DesktopIconProfiles);
         Store.Save("module-performance.json", ModulePerformance);
         Store.Save("module-runtime.json", ModuleRuntime);
+        _updateHttpClient.Dispose();
+        _updateGate.Dispose();
+        _updateLifetime.Dispose();
     }
 
     private void RaiseChanged() => StateChanged?.Invoke(this, EventArgs.Empty);

@@ -2,7 +2,7 @@
 
 ## 执行基线
 
-- 工作区不是 Git 仓库，`git status --short --branch` 返回“不是 git repository”；没有执行任何 reset/checkout/清理操作。
+- 本报告记录的是 Git 初始化前的无人值守基线；当前源码已纳入 Git，并保留了同样的只读与安全门禁。
 - 本地 SDK：.NET `8.0.423`，Windows x64，OS `10.0.26200`。
 - 基线（任务开始前）：单元测试 74 通过；Windows 集成测试 10 通过、2 跳过；CCD 回环需显式环境变量，未作为无人值守默认测试。
 - 基线命令实际使用本地 `work/dotnet-sdk/dotnet.exe`：`restore`、`build SyncWallpaper.sln -c Release`、分别运行两个测试项目；SDK 输出保存在 `artifacts/diagnostics/baseline-dotnet-info.txt`。

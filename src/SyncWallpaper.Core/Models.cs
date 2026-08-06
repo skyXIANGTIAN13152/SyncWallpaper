@@ -135,6 +135,11 @@ public sealed class AppSettings
     public int ConsecutiveStartupFailures { get; set; }
     public string? ActiveProfileId { get; set; }
     public string? DataRoot { get; set; }
+    /// <summary>GitHub Release checks are opt-in and never download or install files.</summary>
+    public bool AutomaticUpdateCheckEnabled { get; set; } = false;
+    public string UpdateChannel { get; set; } = "Stable";
+    public DateTimeOffset? LastUpdateSuccessfulCheckUtc { get; set; }
+    public DateTimeOffset? LastUpdateAttemptUtc { get; set; }
     /// <summary>Default is intentionally lightweight: only the core host and wallpaper matcher run.</summary>
     public ModuleConfiguration Modules { get; set; } = new();
 }

@@ -67,10 +67,12 @@ public sealed class WindowsDisplayConfigurationAdapter :
                 Height = monitor.Height,
                 RefreshRateNumerator = refresh.Numerator,
                 RefreshRateDenominator = refresh.Denominator,
-                Rotation = monitor.Rotation == 0 ? (int)(targetMode.rotation == 0 ? 1 : targetMode.rotation) : monitor.Rotation,
+                Rotation = rawPath.Equals(default(DISPLAYCONFIG_PATH_INFO))
+                    ? monitor.Rotation
+                    : (rawPath.targetInfo.rotation == 0 ? 1 : (int)rawPath.targetInfo.rotation),
                 DpiScale = 1.0,
                 HdrEnabled = null,
-                ColorMode = targetMode.scaling.ToString()
+                ColorMode = rawPath.Equals(default(DISPLAYCONFIG_PATH_INFO)) ? string.Empty : rawPath.targetInfo.scaling.ToString()
             });
         }
         var profile = new DisplayConfigurationProfile { Name = "当前 Windows 显示配置", Displays = entries };
@@ -144,6 +146,11 @@ public sealed class WindowsDisplayConfigurationAdapter :
                     var source = currentModes[sourceIndex].sourceMode;
                     source.width = (uint)entry.Width;
                     source.height = (uint)entry.Height;
+                    if (entry.Rotation is 2 or 4)
+                    {
+                        source.width = (uint)entry.Height;
+                        source.height = (uint)entry.Width;
+                    }
                     if (applyFinalFields)
                         source.position = new POINTL { x = entry.DesktopX, y = entry.DesktopY };
                     currentModes[sourceIndex].sourceMode = source;
@@ -152,8 +159,6 @@ public sealed class WindowsDisplayConfigurationAdapter :
                 if (targetIndex >= 0 && targetIndex < currentModes.Length && currentModes[targetIndex].infoType == ModeInfoTypeTarget)
                 {
                     var mode = currentModes[targetIndex].targetMode;
-                    if (applyFinalFields)
-                        mode.rotation = (uint)Math.Clamp(entry.Rotation, 1, 4);
                     mode.targetVideoSignalInfo.vSyncFreq = path.targetInfo.refreshRate;
                     currentModes[targetIndex].targetMode = mode;
                 }
@@ -279,7 +284,7 @@ public sealed class WindowsDisplayConfigurationAdapter :
         return DisplayConfigGetDeviceInfo(ref request) == 0 ? request.monitorDevicePath ?? string.Empty : string.Empty;
     }
     private static DISPLAYCONFIG_TARGET_MODE FindTargetMode(uint index, DISPLAYCONFIG_MODE_INFO[] modes)
-        => index < modes.Length && modes[index].infoType == ModeInfoTypeTarget ? modes[index].targetMode : new DISPLAYCONFIG_TARGET_MODE { rotation = 1 };
+        => index < modes.Length && modes[index].infoType == ModeInfoTypeTarget ? modes[index].targetMode : new DISPLAYCONFIG_TARGET_MODE();
     private static string LuidString(LUID luid) => $"{luid.HighPart:X8}:{luid.LowPart:X8}";
 
     private sealed record RawDisplayState(DISPLAYCONFIG_PATH_INFO[] Paths, DISPLAYCONFIG_MODE_INFO[] Modes);
@@ -299,8 +304,10 @@ public sealed class WindowsDisplayConfigurationAdapter :
         public ulong pixelRate; public DISPLAYCONFIG_RATIONAL hSyncFreq; public DISPLAYCONFIG_RATIONAL vSyncFreq;
         public DISPLAYCONFIG_2DREGION activeSize; public DISPLAYCONFIG_2DREGION totalSize; public uint videoStandard; public uint scanLineOrdering;
     }
-    [StructLayout(LayoutKind.Sequential)] private struct DISPLAYCONFIG_TARGET_MODE { public DISPLAYCONFIG_VIDEO_SIGNAL_INFO targetVideoSignalInfo; public uint rotation; public uint scaling; }
-    [StructLayout(LayoutKind.Sequential)] private struct DISPLAYCONFIG_SOURCE_MODE { public uint width; public uint height; public uint pixelFormat; public POINTL position; public uint rotation; public uint scaling; }
+    // These mode structures mirror the Windows CCD ABI. Rotation and scaling
+    // are fields of DISPLAYCONFIG_PATH_TARGET_INFO, not mode records.
+    [StructLayout(LayoutKind.Sequential)] private struct DISPLAYCONFIG_TARGET_MODE { public DISPLAYCONFIG_VIDEO_SIGNAL_INFO targetVideoSignalInfo; }
+    [StructLayout(LayoutKind.Sequential)] private struct DISPLAYCONFIG_SOURCE_MODE { public uint width; public uint height; public uint pixelFormat; public POINTL position; }
     [StructLayout(LayoutKind.Sequential)] private struct DISPLAYCONFIG_PATH_SOURCE_INFO { public LUID adapterId; public uint id; public uint modeInfoIdx; public uint statusFlags; }
     [StructLayout(LayoutKind.Sequential)] private struct DISPLAYCONFIG_PATH_TARGET_INFO
     {

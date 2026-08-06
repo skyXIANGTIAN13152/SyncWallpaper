@@ -1,6 +1,6 @@
 # 屏序 SyncWallpaper
 
-一个原生 .NET 8 / WPF 的 Windows 壁纸恢复工具（Release Candidate 1.0.0-rc.1）：依据当前活动显示路径与稳定硬件指纹，识别显示器组合，为逻辑角色恢复对应壁纸。
+一个原生 .NET 8 / WPF 的 Windows 壁纸恢复工具（Release Candidate 1.0.0-rc.2）：依据当前活动显示路径与稳定硬件指纹，识别显示器组合，为逻辑角色恢复对应壁纸。
 
 ## 已实现
 
@@ -13,6 +13,7 @@
 - 每显示器尺寸的渲染缓存，支持填充、适应、拉伸、居中、平铺和 Span，缓存键含原图哈希、尺寸、模式、背景色和渲染版本，并有大小上限。
 - JSON 原子保存与 .bak 恢复，壁纸托管库、SHA-256、软删除保护、日志轮换（单文件 1 MB、保留 7 天）。
 - 深色宇宙观测台 UI：概览、显示器配置、观测档案库、规则与匹配、运行记录、设置、关于；系统托盘；默认关闭窗口只隐藏到托盘。
+- 多组合壁纸档案：在“规则与匹配”中可为不同显示器拓扑保存多套命名组合，每套组合独立保存稳定显示器身份、逻辑角色和壁纸；用户可手动应用所选组合，自动匹配仍会按当前拓扑和匹配优先级选择。
 - 仅管理 SyncWallpaper 自身的当前用户启动项，启动参数为 --background；不修改其他软件或系统服务。
 - 已加入完整套件的数据模型与本地基础服务：显示器配置档案、分割区域、窗口位置档案、触发器/函数定义、全局热键注册、窗口移动/布局捕获、屏幕淡化，以及独立宿主生命周期骨架。
 - 采用按需模块架构：核心宿主只负责配置、托盘、日志、单实例、显示器变化协调、壁纸自动匹配和模块管理；默认安装为轻量模式，不启动任务栏、Shell、远程或在线壁纸进程。
@@ -37,6 +38,8 @@
 - [模块生命周期与恢复协议](docs/module-lifecycle-and-recovery.md)：状态机、超时、退避、持久化和 IPC 健康。
 - [故障注入测试](docs/fault-injection-testing.md)：集中故障点、自动测试边界和真实环境安全门禁。
 - [真实 Windows 验证记录](docs/manual-real-environment-verification.md)：本轮只读验证、跳过项和风险操作清单。
+- [GitHub Release 更新检查器](docs/UPDATE-CHECKER.md)：请求、Stable/Beta、URL 安全、隐私和手动安装边界。
+- [本轮发布验收报告](docs/RELEASE-REPORT.md)：构建、测试、包内容、Updater 停用状态和待填写仓库配置。
 - [无人值守可靠性报告](docs/overnight-reliability-report.md)：基线、改动、测试、soak 和发布顺序。
 - [TaskbarHost 阶段性审计](docs/taskbar-host-audit.md)：只验证进程边界和崩溃隔离，不虚报 Explorer 级任务栏功能。
 
@@ -65,17 +68,26 @@
 
     artifacts\publish\win-x64\Diagnostics\SyncWallpaper.Diagnostics.exe
 
-publish.ps1 生成 framework-dependent RC1 包；publish-selfcontained.ps1 生成 self-contained RC1 包。发布目录同时带有 AppIcon.ico、SVG、许可证、变更记录、第三方声明、安装脚本和 docs，不包含测试数据、密钥或开发机绝对路径。
+publish.ps1 生成 framework-dependent 包；publish-selfcontained.ps1 生成 self-contained 包。发布目录同时带有 AppIcon.ico、SVG、许可证、变更记录、第三方声明、安装脚本和 docs，不包含测试数据、密钥、用户配置、用户日志或开发机绝对路径，也不包含 Updater.exe。
+两种发布 ZIP 的校验和写入 `artifacts\publish\SHA256SUMS.txt`；GitHub Actions 只上传 ZIP、校验和、变更记录和许可证文件。
 
-## RC1 验收、安装与恢复
+## 更新方式
 
-发布包包含 SyncWallpaper.HardwareValidation.exe，提供 21 步只读验收向导、脱敏身份诊断、快照比较和人工确认门禁；另外提供 framework-dependent、自包含、portable ZIP、SHA256 和当前用户安装/升级/卸载脚本。参见 docs/RC1ReleaseCandidateReport.md、docs/HARDWARE-VALIDATION.md、docs/INSTALLATION.md、docs/UPGRADE.md、docs/UNINSTALL.md、docs/SECURITY.md 和 docs/TROUBLESHOOTING.md。
+屏序不会自动下载或安装更新。软件默认不联网；在“设置 → 更新检查”点击“检查更新”时，或用户主动打开“每周自动检查”后，才会查询配置中的 GitHub Releases API。发现新版本后只展示版本号、发布日期和安全的纯文本更新说明，点击“前往 GitHub Release”打开官方 Release 页面，由用户自行下载和安装。
+
+公开仓库为 [skyXIANGTIAN13152/SyncWallpaper](https://github.com/skyXIANGTIAN13152/SyncWallpaper)，集中配置位置为 `src/SyncWallpaper.Update.Core/UpdateModels.cs` 中的 `ProjectLinks.GitHubOwner` 与 `ProjectLinks.GitHubRepository`。更新检查默认关闭，用户主动开启后只查询 GitHub Releases，不会自动下载或安装。
+
+Portable 更新：退出屏序，确认设置页显示的数据目录，下载新的 Portable ZIP，解压到新目录并启动。安装版更新：下载新版安装程序，退出屏序后运行安装程序覆盖升级；用户配置继续保留。应用本身不会调用 Updater、下载 asset、关闭进程、替换文件、执行安装程序或自动回滚。
+
+## RC2 验收、安装与恢复
+
+发布包包含 SyncWallpaper.HardwareValidation.exe，提供 21 步只读验收向导、脱敏身份诊断、快照比较和人工确认门禁；另外提供 framework-dependent、自包含、portable ZIP、SHA256 和当前用户安装/升级/卸载脚本。参见 docs/RC1ReleaseCandidateReport.md（历史基线）、docs/HARDWARE-VALIDATION.md、docs/INSTALLATION.md、docs/UPGRADE.md、docs/UNINSTALL.md、docs/SECURITY.md 和 docs/TROUBLESHOOTING.md。
 
 ## 数据目录
 
-默认位于 %LocalAppData%\SyncWallpaper\：
+可写的 Portable/项目目录会优先使用程序所在的 `SyncWallpaper` 文件夹；当前目录不可写时才回退到 `%LocalAppData%\SyncWallpaper`。设置页会显示实际数据目录：
 
-Wallpapers、Config、Backups\Deleted、Logs、Thumbnails、Cache\Rendered。`Config\module-performance.json` 保存每次模式/模块启停后的真实性能快照；`Config\module-runtime.json` 保存故障恢复元数据，不保存 PID。
+`Wallpapers`、`Config`、`Backups\Deleted`、`Logs`、`Thumbnails`、`Cache\Rendered` 都位于该目录。`Config\module-performance.json` 保存每次模式/模块启停后的真实性能快照；`Config\module-runtime.json` 保存故障恢复元数据，不保存 PID。旧的 `%LocalAppData%\SyncWallpaper` 会在首次启动时迁移到新的数据目录；迁移完成后旧目录可以安全清除，当前 D 盘工作目录中的壁纸和配置不依赖它。
 
 安全诊断：
 
@@ -83,7 +95,7 @@ Wallpapers、Config、Backups\Deleted、Logs、Thumbnails、Cache\Rendered。`Co
     artifacts\publish\win-x64\SyncWallpaper.Diagnostics.exe verify
     artifacts\publish\win-x64\SyncWallpaper.Diagnostics.exe soak --duration-minutes 60 --interval-seconds 60
 
-RC1 最终短时 Real-Time Soak 报告为 artifacts/diagnostics/rc1-final-realtime-soak-1m.json（60.6 秒、13 个样本，qualified12Hour=false）；Accelerated 报告为 artifacts/diagnostics/rc1-final-accelerated-100k.json。12 小时必须由用户运行 realtime-soak --duration-minutes 720 后才可标记合格。soak 只启动屏序自己创建的测试宿主，报告包含 Working Set、Private Bytes、句柄、线程、GDI/USER、CPU、宿主状态/错误和睡眠排除时间，不会改动显示、音频、窗口或 Explorer。
+RC2 沿用安全的只读 Real-Time Soak 与 Accelerated 验收工具；诊断输出位于被忽略的 `artifacts/diagnostics`，不会上传用户配置或硬件报告。12 小时必须由用户运行 `realtime-soak --duration-minutes 720` 后才可标记合格。soak 只启动屏序自己创建的测试宿主，报告包含 Working Set、Private Bytes、句柄、线程、GDI/USER、CPU、宿主状态/错误和睡眠排除时间，不会改动显示、音频、窗口或 Explorer。
 
 首次运行会尝试导入桌面 wallpaper\本体.*、横屏1.*、竖屏1.*。壁纸被复制到托管目录后，原文件移动不会影响托管副本。
 

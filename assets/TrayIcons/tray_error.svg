@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">SyncWallpaper ambiguous or error tray icon</title>
+  <desc id="desc">A red broken observation ring with an uncertain companion display and warning triangle.</desc>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 18a27 27 0 0 1 39 1M53 36a27 27 0 0 1-13 20M29 58A27 27 0 0 1 8 39" stroke="#C32E34" stroke-width="3.5"/>
+    <rect x="15" y="24" width="28" height="19" rx="3" stroke="#FF4F4E" stroke-width="3.6"/>
+    <path d="M29 43v6M23 49h12" stroke="#FF4F4E" stroke-width="3.6"/>
+    <rect x="38" y="32" width="17" height="14" rx="2" stroke="#FF4F4E" stroke-width="3.1" stroke-dasharray="5 4"/>
+    <path d="M35 44l4 4-3 4" stroke="#FF4F4E" stroke-width="3.1"/>
+  </g>
+  <path d="M50 42l10 16H40z" fill="#FF4F4E"/>
+  <path d="M50 47v5" stroke="#241522" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="50" cy="55" r="1.5" fill="#241522"/>
+</svg>

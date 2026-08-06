@@ -1,0 +1,47 @@
+name: release
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore
+        run: dotnet restore SyncWallpaper.sln
+      - name: Build and test
+        run: |
+          dotnet build SyncWallpaper.sln -c Release --no-restore
+          dotnet test SyncWallpaper.sln -c Release --no-build
+      - name: Build framework-dependent package
+        shell: pwsh
+        run: .\publish.ps1
+      - name: Build self-contained package
+        shell: pwsh
+        run: .\publish.ps1 -SelfContained
+      - name: Generate SHA256SUMS
+        shell: pwsh
+        run: |
+          Get-ChildItem artifacts\publish -Filter *.zip | Get-FileHash -Algorithm SHA256 |
+            ForEach-Object { '{0}  {1}' -f $_.Hash.ToLowerInvariant(), $_.Path.Substring((Resolve-Path artifacts\publish).Path.Length + 1) } |
+            Set-Content artifacts\publish\SHA256SUMS.txt -Encoding ASCII
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: SyncWallpaper-release
+          path: |
+            artifacts/publish/*.zip
+            artifacts/publish/*.sha256
+            artifacts/publish/SHA256SUMS.txt
+            CHANGELOG.md
+            LICENSE
+            THIRD-PARTY-NOTICES.md

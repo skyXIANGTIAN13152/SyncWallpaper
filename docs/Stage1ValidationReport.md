@@ -12,11 +12,8 @@
   - `DISPLAY2`：`X=-1440,Y=0,1440×2560`，非主屏，竖屏。
   - `DISPLAY3`：`X=0,Y=0,2560×1440`，主屏。
 - 上面的 `Screen.AllScreens` 数值是当前进程 DPI 上下文看到的桌面坐标；原生 CCD 日志中的 `1920×1200 / 2160×3840 / 3840×2160` 是物理像素。两组数值的差异正好体现了当前机器的混合 DPI/缩放，配置事务使用 CCD 物理坐标，窗口引擎再做显式 DPI 换算。
-- 原生显示路径日志中记录的稳定标签/设备路径：
-  - `TL134ADXP03`：`DISPLAY#TMA0803#5&2a56f61f&0&UID256#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}`，`1920×1200 @ 5760,-302`。
-  - `VG27AQL1A`：`DISPLAY#AUS2704#5&2a56f61f&0&UID261#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}`，`2160×3840 @ -2160,0`。
-  - `U27G42`：`DISPLAY#AOCB426#5&2a56f61f&0&UID257#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}`，`3840×2160 @ 0,0`。
-- 系统 PnP 音频设备：`USB Audio Device`、`Realtek High Definition Audio`、`AMD High Definition Audio Device`，状态均为 `OK`。Core Audio COM 枚举在当前会话已通过；真实默认端点切换仍未执行。
+- 原生显示路径日志确认了三条活动路径、稳定标签和设备路径；公开报告不保存真实型号、EDID 序列号、UID、ContainerId 或 monitorDevicePath，具体值以脱敏哈希形式保存在本机诊断输出中。
+- 系统 PnP 音频设备枚举状态均为 `OK`；公开报告不保存本机厂商/设备名称。Core Audio COM 枚举在当前会话已通过；真实默认端点切换仍未执行。
 
 ## 自动化测试结果
 

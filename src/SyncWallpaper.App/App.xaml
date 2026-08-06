@@ -3,27 +3,113 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              ShutdownMode="OnExplicitShutdown">
     <Application.Resources>
-        <SolidColorBrush x:Key="AppBackground" Color="#070D1B"/>
-        <SolidColorBrush x:Key="PanelBackground" Color="#0D1728"/>
-        <SolidColorBrush x:Key="PanelBackground2" Color="#101E32"/>
-        <SolidColorBrush x:Key="Cyan" Color="#36E8FF"/>
-        <SolidColorBrush x:Key="Blue" Color="#4D8CFF"/>
-        <SolidColorBrush x:Key="Purple" Color="#A66CFF"/>
-        <SolidColorBrush x:Key="TextPrimary" Color="#E7F7FF"/>
-        <SolidColorBrush x:Key="TextSecondary" Color="#88A6BD"/>
-        <SolidColorBrush x:Key="Border" Color="#244B69"/>
+        <!-- The application intentionally leaves the outer window transparent.  These
+             brushes are the glass surface and its controls; the alpha channel lets
+             the desktop show through around the rounded surface and between cards. -->
+        <SolidColorBrush x:Key="AppBackground" Color="#00050B17"/>
+        <SolidColorBrush x:Key="WindowSurface" Color="#E5071020"/>
+        <SolidColorBrush x:Key="PanelBackground" Color="#C20B1930"/>
+        <SolidColorBrush x:Key="PanelBackground2" Color="#B9182A49"/>
+        <SolidColorBrush x:Key="GlassCardBackground" Color="#B9142744"/>
+        <SolidColorBrush x:Key="InputBackground" Color="#D5112038"/>
+        <SolidColorBrush x:Key="Cyan" Color="#35E7FF"/>
+        <SolidColorBrush x:Key="Blue" Color="#5B8DFF"/>
+        <SolidColorBrush x:Key="Purple" Color="#B27BFF"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#F3F8FF"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#AFC4DE"/>
+        <SolidColorBrush x:Key="Border" Color="#46617F"/>
+        <SolidColorBrush x:Key="GlassBorder" Color="#5A76A7C7"/>
+        <LinearGradientBrush x:Key="ButtonBackground" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#D51A3657" Offset="0"/>
+            <GradientStop Color="#C91A2348" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="HeaderBackground" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#E60B1830" Offset="0"/>
+            <GradientStop Color="#D91A1C42" Offset="0.72"/>
+            <GradientStop Color="#D31A1034" Offset="1"/>
+        </LinearGradientBrush>
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
             <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI"/>
         </Style>
         <Style TargetType="Button">
             <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
-            <Setter Property="Background" Value="#14283E"/>
+            <Setter Property="Background" Value="{StaticResource ButtonBackground}"/>
             <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="14,8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="0,0,8,0"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonSurface" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="9" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="#E02C5680"/>
+                                <Setter TargetName="ButtonSurface" Property="BorderBrush" Value="{StaticResource Cyan}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="#ED216184"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonSurface" Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Background" Value="{StaticResource InputBackground}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,7"/>
+        </Style>
+        <Style TargetType="ComboBox">
+            <!-- The Windows default ComboBox template can use a light selection
+                 surface even when the window is dark.  Keep the text dark on that
+                 surface so the selected value is readable in both the closed and
+                 opened states. -->
+            <Setter Property="Foreground" Value="#14243C"/>
+            <Setter Property="Background" Value="#F3F7FC"/>
+            <Setter Property="BorderBrush" Value="#6E8AA8C8"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="9,5"/>
+        </Style>
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="#14243C"/>
+            <Setter Property="Background" Value="#F3F7FC"/>
+            <Setter Property="Padding" Value="9,6"/>
+            <Style.Triggers>
+                <Trigger Property="IsHighlighted" Value="True">
+                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="Background" Value="#2879A6"/>
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Foreground" Value="#14243C"/>
+                    <Setter Property="Background" Value="#C9EAF7"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="#7E8B9D"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style TargetType="ListBoxItem">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="Margin" Value="0,2"/>
         </Style>
     </Application.Resources>
 </Application>

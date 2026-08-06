@@ -33,6 +33,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.Diagnostics",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.HardwareValidation", "src\SyncWallpaper.HardwareValidation\SyncWallpaper.HardwareValidation.csproj", "{2F78D022-52B3-49D6-9B79-4D775370D8C2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.Update.Core", "src\SyncWallpaper.Update.Core\SyncWallpaper.Update.Core.csproj", "{7E3D1BD9-EC7B-4D87-A07B-8E6B3E6D1A7C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncWallpaper.Update.Tests", "tests\SyncWallpaper.Update.Tests\SyncWallpaper.Update.Tests.csproj", "{9B4AE5C2-2F6F-4D5E-9B7B-9F4C7A81D2E3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -94,6 +98,14 @@ Global
 		{2F78D022-52B3-49D6-9B79-4D775370D8C2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2F78D022-52B3-49D6-9B79-4D775370D8C2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2F78D022-52B3-49D6-9B79-4D775370D8C2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7E3D1BD9-EC7B-4D87-A07B-8E6B3E6D1A7C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7E3D1BD9-EC7B-4D87-A07B-8E6B3E6D1A7C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7E3D1BD9-EC7B-4D87-A07B-8E6B3E6D1A7C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7E3D1BD9-EC7B-4D87-A07B-8E6B3E6D1A7C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9B4AE5C2-2F6F-4D5E-9B7B-9F4C7A81D2E3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9B4AE5C2-2F6F-4D5E-9B7B-9F4C7A81D2E3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9B4AE5C2-2F6F-4D5E-9B7B-9F4C7A81D2E3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9B4AE5C2-2F6F-4D5E-9B7B-9F4C7A81D2E3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{AC7E0375-3635-41A3-ABCA-144762DCC11F} = {FBC8428E-F6DD-4A47-B470-AB831AC3769E}
@@ -109,5 +121,7 @@ Global
 		{F9DDF55B-D5C0-44A8-87E2-3E0F7D6A1F2E} = {2E051573-0DDF-4CF0-9703-F87481424296}
 		{1DA44584-8644-40D9-A70D-CC6F505107BC} = {FBC8428E-F6DD-4A47-B470-AB831AC3769E}
 		{2F78D022-52B3-49D6-9B79-4D775370D8C2} = {FBC8428E-F6DD-4A47-B470-AB831AC3769E}
+		{7E3D1BD9-EC7B-4D87-A07B-8E6B3E6D1A7C} = {FBC8428E-F6DD-4A47-B470-AB831AC3769E}
+		{9B4AE5C2-2F6F-4D5E-9B7B-9F4C7A81D2E3} = {2E051573-0DDF-4CF0-9703-F87481424296}
 	EndGlobalSection
 EndGlobal

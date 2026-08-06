@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0-rc.2 — 2026-08-06
+
+- Configured the public GitHub Releases checker for `skyXIANGTIAN13152/SyncWallpaper`.
+- Added named wallpaper combinations with save, apply, rename and delete actions; deleting a profile never deletes wallpaper assets.
+- Added wallpaper library refresh and per-display wallpaper status reporting, with missing-file and ambiguous-identity safeguards.
+- Updated the taskbar/tray icon assets and accessibility-oriented control colors.
+- Replaced the unused automatic-install update design with an opt-in GitHub Releases checker; release packages explicitly exclude `SyncWallpaper.Updater.exe`.
+- Kept ordinary configuration backups and profile migration behavior unchanged.
+
+## Unreleased
+
+- Future changes will be listed here before the next tagged release.
+
 ## 1.0.0-rc.1 — 2026-08-05
 
 - Added formal Git baseline and release/1.0.0-rc1 branch.

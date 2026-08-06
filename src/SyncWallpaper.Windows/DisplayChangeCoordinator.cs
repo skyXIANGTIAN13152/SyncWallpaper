@@ -111,6 +111,10 @@ internal sealed class NativeSystemMessageSource : IDisposable
         _record = record; _signal = signal;
         var parameters = new HwndSourceParameters("SyncWallpaper.DisplayWatcher") { Width = 1, Height = 1, PositionX = -32000, PositionY = -32000, UsesPerPixelOpacity = false };
         _source = new HwndSource(parameters);
+        // HwndSource creates a normal top-level window by default. Without
+        // explicitly hiding it, Windows groups this 1x1 event receiver into
+        // the taskbar and shows a misleading second SyncWallpaper thumbnail.
+        HideFromTaskbar(_source.Handle);
         _source.AddHook(WndProc);
         _taskbarCreated = RegisterWindowMessage("TaskbarCreated");
     }
@@ -132,6 +136,29 @@ internal sealed class NativeSystemMessageSource : IDisposable
     }
 
     public void Dispose() { _source.RemoveHook(WndProc); _source.Dispose(); }
+
+    private static void HideFromTaskbar(IntPtr hwnd)
+    {
+        var extendedStyle = GetWindowLongPtr(hwnd, ExtendedStyleIndex).ToInt64();
+        extendedStyle = (extendedStyle & ~AppWindowStyle) | ToolWindowStyle | NoActivateStyle;
+        SetWindowLongPtr(hwnd, ExtendedStyleIndex, new IntPtr(extendedStyle));
+        ShowWindow(hwnd, HideWindow);
+    }
+
+    private const int ExtendedStyleIndex = -20;
+    private const long ToolWindowStyle = 0x00000080L;
+    private const long AppWindowStyle = 0x00040000L;
+    private const long NoActivateStyle = 0x08000000L;
+    private const int HideWindow = 0;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
+    private static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
+    private static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    private static extern bool ShowWindow(IntPtr hwnd, int command);
 
     [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
     private static extern int RegisterWindowMessage(string lpString);

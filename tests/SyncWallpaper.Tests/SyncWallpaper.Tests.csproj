@@ -11,6 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\SyncWallpaper.App\SyncWallpaper.App.csproj" />
     <ProjectReference Include="..\..\src\SyncWallpaper.Core\SyncWallpaper.Core.csproj" />
     <ProjectReference Include="..\..\src\SyncWallpaper.DisplayEngine\SyncWallpaper.DisplayEngine.csproj" />
     <ProjectReference Include="..\..\src\SyncWallpaper.AudioEngine\SyncWallpaper.AudioEngine.csproj" />

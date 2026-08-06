@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">SyncWallpaper paused tray icon</title>
+  <desc id="desc">A gray-blue observation ring containing displays and a pause mark.</desc>
+  <g fill="none" stroke="#A6B8D3" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="32" cy="32" r="27"/>
+    <rect x="15" y="24" width="28" height="19" rx="3"/>
+    <path d="M29 43v6M23 49h12"/>
+    <rect x="38" y="32" width="17" height="14" rx="2" stroke="#71839F" stroke-width="3.1"/>
+    <path d="M41 48h13" stroke="#71839F" stroke-width="3.1"/>
+  </g>
+  <rect x="27" y="10" width="4" height="9" rx="1" fill="#A6B8D3"/>
+  <rect x="35" y="10" width="4" height="9" rx="1" fill="#A6B8D3"/>
+</svg>

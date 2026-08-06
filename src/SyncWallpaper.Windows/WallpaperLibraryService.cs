@@ -13,6 +13,30 @@ public sealed class WallpaperLibraryService
     public LibraryDocument Load() => _store.Load("library.json", new LibraryDocument());
     public WallpaperAsset? Find(string id) => Load().Assets.FirstOrDefault(a => a.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Reconciles the persisted library with the files currently on disk.
+    /// Missing files are marked instead of being removed so profile bindings
+    /// remain explainable and can recover if a file is restored later.
+    /// </summary>
+    public WallpaperLibraryRefreshResult Refresh()
+    {
+        var document = Load();
+        var missing = 0;
+        var recovered = 0;
+        var changed = false;
+        foreach (var asset in document.Assets)
+        {
+            var exists = File.Exists(ResolvePath(asset));
+            if (asset.IsMissing == !exists) continue;
+            asset.IsMissing = !exists;
+            changed = true;
+            if (exists) recovered++; else missing++;
+        }
+
+        if (changed) _store.Save("library.json", document);
+        return new WallpaperLibraryRefreshResult(document, missing, recovered);
+    }
+
     public WallpaperAsset Import(string sourcePath, string? displayName = null)
     {
         var doc = Load(); var hash = FileUtilities.Sha256(sourcePath);
@@ -47,4 +71,11 @@ public sealed class WallpaperLibraryService
         }
         doc.Assets.Remove(asset); _store.Save("library.json", doc); return true;
     }
+
+    private string ResolvePath(WallpaperAsset asset)
+        => asset.StorageMode.Equals("External", StringComparison.OrdinalIgnoreCase)
+            ? asset.ExternalPath ?? string.Empty
+            : Path.Combine(_store.Paths.Root, asset.ManagedRelativePath.Replace('/', Path.DirectorySeparatorChar));
 }
+
+public sealed record WallpaperLibraryRefreshResult(LibraryDocument Document, int MissingCount, int RecoveredCount);
