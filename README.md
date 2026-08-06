@@ -98,7 +98,7 @@ Portable 更新：退出屏序，确认设置页显示的数据目录，下载�
 RC2 沿用安全的只读 Real-Time Soak 与 Accelerated 验收工具；诊断输出位于被忽略的 `artifacts/diagnostics`，不会上传用户配置或硬件报告。12 小时必须由用户运行 `realtime-soak --duration-minutes 720` 后才可标记合格。soak 只启动屏序自己创建的测试宿主，报告包含 Working Set、Private Bytes、句柄、线程、GDI/USER、CPU、宿主状态/错误和睡眠排除时间，不会改动显示、音频、窗口或 Explorer。
 
 首次运行会尝试导入桌面 wallpaper\本体.*、横屏1.*、竖屏1.*。壁纸被复制到托管目录后，原文件移动不会影响托管副本。
-
+//
 ## 手动验证
 
 1. 启动软件，确认概览显示当前活动显示器与匹配置信度。
