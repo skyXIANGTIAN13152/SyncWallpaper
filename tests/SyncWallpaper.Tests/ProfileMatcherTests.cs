@@ -72,6 +72,22 @@ public class ProfileMatcherTests
         Assert.AreEqual("evening", result.Profile?.Roles[0].WallpaperAssetId);
     }
 
+    [TestMethod]
+    public void Matching_DoesNotPromoteOrRewriteSavedProfiles()
+    {
+        var monitor = Monitor("TMA", "0803", "L-1", "L", 0, true);
+        var profile = Profile("固定方案", ("Laptop", monitor));
+        profile.Priority = 17;
+        var modified = new DateTime(2026, 8, 1, 12, 0, 0, DateTimeKind.Utc);
+        profile.ModifiedAt = modified;
+
+        var result = new ProfileMatcher().Match(new[] { monitor.Clone() }, new[] { profile });
+
+        Assert.AreEqual(MatchStatus.Exact, result.Status);
+        Assert.AreEqual(17, profile.Priority);
+        Assert.AreEqual(modified, profile.ModifiedAt);
+    }
+
     private static MonitorIdentity Monitor(string manufacturer, string product, string serial, string path, int x, bool internalDisplay = false) => new()
     {
         ManufacturerName = manufacturer, ProductCodeId = product, EdidManufactureId = manufacturer, EdidProductCodeId = product,
