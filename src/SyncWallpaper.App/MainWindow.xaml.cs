@@ -38,6 +38,9 @@ public partial class MainWindow : Window
     private void Runtime_StateChanged(object? sender, EventArgs e) => Dispatcher.InvokeAsync(Refresh);
     private void Refresh()
     {
+        var selectedProfileId = (WallpaperProfilesList.SelectedItem as WallpaperProfileItem)?.Id
+            ?? WallpaperProfilesList.SelectedValue?.ToString()
+            ?? _runtime.Settings.ActiveProfileId;
         StatusBadge.Text = _runtime.StatusText; OverviewStatus.Text = _runtime.StatusText; LastMessage.Text = _runtime.LastMessage;
         WallpaperTransactionText.Text = $"{_runtime.LastWallpaperTransaction.State} · {_runtime.LastWallpaperTransaction.DurationMilliseconds:0} ms · {_runtime.LastWallpaperTransaction.Message}";
         MonitorCount.Text = _runtime.Monitors.Count.ToString(); ProfileName.Text = _runtime.LastMatch?.Profile?.Name ?? "未选择";
@@ -66,10 +69,12 @@ public partial class MainWindow : Window
             .ToList();
         WallpaperProfilesList.ItemsSource = wallpaperProfiles;
         WallpaperProfilesList.SelectedValuePath = nameof(WallpaperProfileItem.Id);
-        WallpaperProfilesList.SelectedValue = _runtime.Settings.ActiveProfileId;
+        WallpaperProfilesList.SelectedValue = wallpaperProfiles.Any(x => x.Id.Equals(selectedProfileId, StringComparison.OrdinalIgnoreCase))
+            ? selectedProfileId
+            : null;
         WallpaperProfilesStatusText.Text = wallpaperProfiles.Count == 0
             ? "尚未保存壁纸组合。"
-            : $"已保存 {wallpaperProfiles.Count} 套壁纸组合；当前优先使用“{_runtime.Profiles.Profiles.FirstOrDefault(x => x.Id.Equals(_runtime.Settings.ActiveProfileId, StringComparison.OrdinalIgnoreCase))?.Name ?? "自动匹配"}”。";
+            : $"已保存 {wallpaperProfiles.Count} 套壁纸组合；绿色表示已匹配，红色表示未匹配。";
         _libraryItems.Clear();
         foreach (var a in _runtime.Library.Assets.Where(x => !x.IsMissing))
             _libraryItems.Add(new LibraryItem(a.DisplayName, $"{a.Width} × {a.Height} · {a.Format} · {a.FileSize / 1024} KB", a.ManagedRelativePath));
@@ -482,7 +487,12 @@ public partial class MainWindow : Window
                     : asset.IsMissing ? $"{asset.DisplayName}（文件不存在）" : asset.DisplayName;
                 return $"{role.DisplayName}：{wallpaper}";
             }));
-        var state = profile.Id.Equals(_runtime.Settings.ActiveProfileId, StringComparison.OrdinalIgnoreCase) ? "当前" : profile.Enabled ? "已启用" : "已停用";
+        var match = _runtime.LastMatch;
+        var state = match?.Profile?.Id.Equals(profile.Id, StringComparison.OrdinalIgnoreCase) == true
+            && match.Status is MatchStatus.Exact or MatchStatus.Compatible
+            && match.CanAutoApply
+            ? "已匹配"
+            : "未匹配";
         var updated = $"{profile.ExpectedMonitorCount} 台显示器 · 优先级 {profile.Priority} · 修改于 {profile.ModifiedAt.ToLocalTime():yyyy-MM-dd HH:mm}";
         return new WallpaperProfileItem(profile.Id, profile.Name, state, details, updated);
     }

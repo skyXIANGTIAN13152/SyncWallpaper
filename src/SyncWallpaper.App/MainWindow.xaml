@@ -268,9 +268,9 @@
                         <Border Style="{StaticResource Card}">
                             <StackPanel>
                                 <TextBlock Text="壁纸组合档案" FontSize="17"/>
-                                <TextBlock Text="每套档案独立保存显示器身份、逻辑角色和壁纸。插拔后会按当前显示器组合自动选择；同一组合也可以保存多套壁纸方案。" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,8,0,14"/>
+                                <TextBlock Text="每套档案独立保存显示器身份、逻辑角色和壁纸。插拔后会按现有显示器组合自动匹配；同一组合也可以保存多套壁纸方案。" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,8,0,14"/>
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBox x:Name="WallpaperProfileNameText" Text="当前组合" Width="230" Height="34" VerticalContentAlignment="Center" ToolTip="输入这套显示器组合的名称"/>
+                                    <TextBox x:Name="WallpaperProfileNameText" Text="" Width="230" Height="34" VerticalContentAlignment="Center" ToolTip="输入这套显示器组合的名称"/>
                                     <Button Content="保存当前壁纸组合" Click="SaveWallpaperProfile_Click" Margin="10,0,0,0"/>
                                     <Button Content="应用选中组合" Click="ApplyWallpaperProfile_Click" Margin="10,0,0,0"/>
                                     <Button Content="重命名选中组合" Click="RenameWallpaperProfile_Click" Margin="10,0,0,0"/>
@@ -294,7 +294,18 @@
                                                 <StackPanel>
                                                     <DockPanel>
                                                         <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold"/>
-                                                        <TextBlock Text="{Binding State}" DockPanel.Dock="Right" Foreground="{StaticResource Cyan}" Margin="12,0,0,0"/>
+                                                        <TextBlock Text="{Binding State}" DockPanel.Dock="Right" Margin="12,0,0,0">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Foreground" Value="#FFEF4444"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding State}" Value="已匹配">
+                                                                            <Setter Property="Foreground" Value="#FF34D399"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
                                                     </DockPanel>
                                                     <TextBlock Text="{Binding Details}" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,6,0,0"/>
                                                     <TextBlock Text="{Binding Updated}" Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="0,5,0,0"/>

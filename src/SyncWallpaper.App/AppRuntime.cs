@@ -668,13 +668,24 @@ public sealed class AppRuntime : IDisposable
     public async Task ReapplyAsync()
     {
         if (Monitors.Count == 0) Monitors = _discovery.Discover();
-        await MatchAndApplyAsync(manual: true);
+        // Reapply is a retry of the last successful match.  It must not run
+        // the priority resolver again and unexpectedly switch to another
+        // saved combination.  A topology change still enters
+        // ProcessStableDisplaysAsync, which performs a fresh all-profile
+        // match before applying.
+        WallpaperProfile? preferredProfile = null;
+        if (LastMatch is { Profile: not null, CanAutoApply: true } previous
+            && previous.Status is MatchStatus.Exact or MatchStatus.Compatible)
+            preferredProfile = previous.Profile;
+        await MatchAndApplyAsync(manual: true, preferredProfile);
     }
 
-    private async Task MatchAndApplyAsync(bool manual = false)
+    private async Task MatchAndApplyAsync(bool manual = false, WallpaperProfile? preferredProfile = null)
     {
         if (Monitors.Count == 0) { StatusText = "未发现显示器"; LastMessage = "没有活动显示路径"; RaiseChanged(); return; }
-        LastMatch = _matcher.Match(Monitors, Profiles.Profiles);
+        LastMatch = preferredProfile is null
+            ? _matcher.Match(Monitors, Profiles.Profiles)
+            : _matcher.Match(Monitors, new[] { preferredProfile });
         _log.Write("Match", LastMatch.Message, LastMatch.Profile?.Name, Monitors.Count, LastMatch.Confidence);
         if (LastMatch.Status == MatchStatus.Ambiguous)
         {
@@ -1166,15 +1177,10 @@ public sealed class AppRuntime : IDisposable
         if (profile is null) { LastMessage = "找不到所选壁纸组合"; RaiseChanged(); return false; }
         if (Monitors.Count == 0) { StatusText = "未发现显示器"; LastMessage = "没有活动显示器"; RaiseChanged(); return false; }
 
-        // Selecting a saved profile is an explicit user choice.  Give it the
-        // highest priority so an identical topology does not immediately
-        // switch back to another saved wallpaper set.
-        profile.Priority = Profiles.Profiles.Count == 0 ? 100 : Profiles.Profiles.Max(x => x.Priority) + 1;
-        profile.ModifiedAt = DateTime.UtcNow;
-        Settings.ActiveProfileId = profile.Id;
-        Store.Save("profiles.json", Profiles);
-        Store.Save("settings.json", Settings);
-
+        // Applying a saved profile is intentionally transient.  It must not
+        // promote the profile, rewrite its modified time, or change the
+        // user's selected row.  The next topology change is evaluated by the
+        // normal matcher across every saved profile.
         LastMatch = _matcher.Match(Monitors, new[] { profile });
         _log.Write("Match", $"用户选择壁纸组合：{profile.Name}；{LastMatch.Message}", profile.Name, Monitors.Count, LastMatch.Confidence);
         if (LastMatch.Status == MatchStatus.Ambiguous || LastMatch.Status == MatchStatus.NoMatch || !LastMatch.CanAutoApply)
@@ -1229,6 +1235,8 @@ public sealed class AppRuntime : IDisposable
         if (index < 0) return false;
         var removed = Profiles.Profiles[index];
         Profiles.Profiles.RemoveAt(index);
+        if (LastMatch?.Profile?.Id.Equals(removed.Id, StringComparison.OrdinalIgnoreCase) == true)
+            LastMatch = null;
         if (string.Equals(Settings.ActiveProfileId, removed.Id, StringComparison.OrdinalIgnoreCase))
         {
             Settings.ActiveProfileId = Profiles.Profiles
@@ -1237,7 +1245,6 @@ public sealed class AppRuntime : IDisposable
                 .ThenByDescending(x => x.ModifiedAt)
                 .Select(x => (string?)x.Id)
                 .FirstOrDefault();
-            LastMatch = null;
         }
         Store.Save("profiles.json", Profiles);
         Store.Save("settings.json", Settings);
