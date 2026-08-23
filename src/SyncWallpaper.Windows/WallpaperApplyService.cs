@@ -64,7 +64,7 @@ public sealed class WallpaperApplyService
             foreach (var role in match.Profile.Roles)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!match.RoleMatches.TryGetValue(role.Role, out var monitor)) continue;
+                if (!match.TryGetMonitor(role, out var monitor)) continue;
                 var asset = assets.FirstOrDefault(a => string.Equals(a.Id, role.WallpaperAssetId, StringComparison.OrdinalIgnoreCase));
                 var source = asset is null ? role.WallpaperPath : Resolve(asset, paths);
                 if (string.IsNullOrWhiteSpace(source) || !File.Exists(source)) { missing++; _log($"壁纸文件不存在：{source}"); continue; }

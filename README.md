@@ -6,14 +6,17 @@
 
 - QueryDisplayConfig + DisplayConfigGetDeviceInfo 读取活动路径、monitorDevicePath、EDID 厂商/产品、output technology、connector instance、adapter/target、分辨率、旋转和桌面坐标。
 - WmiMonitorID 后台补充 InstanceName、序列号、厂商、产品代码和友好名称。
-- 分层匹配：厂商 + 产品 + EDID 序列号 → monitorDevicePath → 适配器/target/接口实例 → 分辨率/方向/桌面坐标；同分或同型号无可靠序列号时返回 Ambiguous，保持现有壁纸并要求确认。
+- 分层匹配：厂商 + 产品 + EDID 序列号 → monitorDevicePath → WMI InstanceName → 适配器/target/接口实例 → ContainerId/几何辅助证据。只有序列号、设备路径、InstanceName 或硬件拓扑等强证据可以自动应用；弱证据、同分或同型号歧义会保持现有壁纸并要求确认。
 - 逻辑角色使用 Laptop、Landscape、Portrait，不保存 Windows 临时显示器编号；内置屏/外接屏会在首次运行时从桌面 wallpaper 文件夹建立示例档案。
 - 事件驱动防抖：原生显示/设备/电源/DPI/Explorer 消息与系统事件触发 2 秒稳定窗口，再连续读取两次相同状态（最多 10 秒）。
 - IDesktopWallpaper 逐显示器设置并回读验证，失败最多重试两次；缺失文件/无匹配/歧义不会写入黑色或随机壁纸。
-- 每显示器尺寸的渲染缓存，支持填充、适应、拉伸、居中、平铺和 Span，缓存键含原图哈希、尺寸、模式、背景色和渲染版本，并有大小上限。
-- JSON 原子保存与 .bak 恢复，壁纸托管库、SHA-256、软删除保护、日志轮换（单文件 1 MB、保留 7 天）。
+- 每显示器尺寸的渲染缓存，支持填充、适应、拉伸、居中、平铺和 Span，缓存键含原图哈希、尺寸、模式、背景色和渲染版本；轻量模式上限 128 MiB，其他模式上限 512 MiB，并按最近使用时间自动清理。
+- JSON 临时文件落盘后原子替换；按当前产品设置不保留配置历史副本。壁纸托管库使用 SHA-256，用户删除的壁纸仍使用可恢复的软删除保护，日志按单文件 1 MB、保留 7 天轮换。
 - 深色宇宙观测台 UI：概览、显示器配置、观测档案库、规则与匹配、运行记录、设置、关于；系统托盘；默认关闭窗口只隐藏到托盘。
-- 多组合壁纸档案：在“规则与匹配”中可为不同显示器拓扑保存多套命名组合，每套组合独立保存稳定显示器身份、逻辑角色和壁纸；用户可手动应用所选组合，自动匹配仍会按当前拓扑和匹配优先级选择。
+- 多组合壁纸档案：在“规则与匹配”中可为不同显示器拓扑保存、命名、重命名和删除多套组合。手动“应用”只临时应用所选组合，不会改写编辑选择、优先级或修改时间；显示器拓扑变化后会自动寻找并应用匹配组合。
+- 壁纸组合编辑器：可先建立安全的空白组合，再随时添加当前或已保存显示器、逻辑角色、托管壁纸和填充方式。空白组合及未完成配置不会自动匹配；只有每个角色都具备可靠显示器身份和有效壁纸时，才允许启用自动应用。
+- FancyZones 类窗口区域：可按稳定显示器身份保存左右二分、横向三分、上下二分、四宫格和“主区 + 双副区”预设。启用 Window Engine 后，按住 Shift 拖动普通窗口并松开即可吸附；身份歧义和高权限窗口会被安全跳过。
+- 独立副屏任务栏 v3：按需启动 `TaskbarHost` 后，每个非主显示器创建一条不注入、不替换 Explorer 的任务栏；支持 Win32/UWP 过滤、按屏归属、应用分组、逐窗口切换/关闭、DWM 悬停实时预览、共享固定应用、时钟和底边自动隐藏。单副屏可用公开 AppBar API 预留工作区；多副屏在 Shell 无法保证逐屏预留时安全回退为覆盖模式，不错误修改桌面。混合 DPI 使用显示设备名对应原生工作区；停用后窗口、缩略图、AppBar、WinEvent Hook、Timer 和进程全部退出。
 - 仅管理 SyncWallpaper 自身的当前用户启动项，启动参数为 --background；不修改其他软件或系统服务。
 - 已加入完整套件的数据模型与本地基础服务：显示器配置档案、分割区域、窗口位置档案、触发器/函数定义、全局热键注册、窗口移动/布局捕获、屏幕淡化，以及独立宿主生命周期骨架。
 - 采用按需模块架构：核心宿主只负责配置、托盘、日志、单实例、显示器变化协调、壁纸自动匹配和模块管理；默认安装为轻量模式，不启动任务栏、Shell、远程或在线壁纸进程。
@@ -38,10 +41,12 @@
 - [模块生命周期与恢复协议](docs/module-lifecycle-and-recovery.md)：状态机、超时、退避、持久化和 IPC 健康。
 - [故障注入测试](docs/fault-injection-testing.md)：集中故障点、自动测试边界和真实环境安全门禁。
 - [真实 Windows 验证记录](docs/manual-real-environment-verification.md)：本轮只读验证、跳过项和风险操作清单。
+- [阶段 1 窗口区域报告](docs/Phase1WindowZonesReport.md)：记录区域预设、稳定身份绑定、Shift 事件生命周期、测试和真实验证边界。
+- [阶段 2 副屏任务栏 v3 报告](docs/Phase2TaskbarHostReport.md)：记录独立进程、窗口过滤、分组、固定项、实时缩略图、自动隐藏、AppBar 安全降级、混合 DPI、资源占用和关闭清理。
 - [GitHub Release 更新检查器](docs/UPDATE-CHECKER.md)：请求、Stable/Beta、URL 安全、隐私和手动安装边界。
 - [本轮发布验收报告](docs/RELEASE-REPORT.md)：构建、测试、包内容、Updater 停用状态和待填写仓库配置。
 - [无人值守可靠性报告](docs/overnight-reliability-report.md)：基线、改动、测试、soak 和发布顺序。
-- [TaskbarHost 阶段性审计](docs/taskbar-host-audit.md)：只验证进程边界和崩溃隔离，不虚报 Explorer 级任务栏功能。
+- [TaskbarHost 历史基线审计](docs/taskbar-host-audit.md)：保留阶段 2 开始前只有进程边界时的历史证据。
 
 审计快照位于 vendor/reference-audit，仅供研究，不参与编译；在对标矩阵核心功能全部达到 Verified 前，不声称完全对标 DisplayFusion Pro。
 
@@ -87,7 +92,7 @@ Portable 更新：退出屏序，确认设置页显示的数据目录，下载�
 
 可写的 Portable/项目目录会优先使用程序所在的 `SyncWallpaper` 文件夹；当前目录不可写时才回退到 `%LocalAppData%\SyncWallpaper`。设置页会显示实际数据目录：
 
-`Wallpapers`、`Config`、`Backups\Deleted`、`Logs`、`Thumbnails`、`Cache\Rendered` 都位于该目录。`Config\module-performance.json` 保存每次模式/模块启停后的真实性能快照；`Config\module-runtime.json` 保存故障恢复元数据，不保存 PID。旧的 `%LocalAppData%\SyncWallpaper` 会在首次启动时迁移到新的数据目录；迁移完成后旧目录可以安全清除，当前 D 盘工作目录中的壁纸和配置不依赖它。
+`Wallpapers`、`Config`、`Backups\Deleted`、`Logs`、`Thumbnails`、`Cache\Rendered` 都位于该目录。`Backups` 只用于用户主动删除壁纸后的软删除区，不再生成配置历史副本。壁纸组合保存在 `Config\profiles.json`，窗口区域保存在 `Config\window-zones.json`；两者只引用托管的 `Wallpapers` 文件。`Config\module-performance.json` 保存每次模式/模块启停后的真实性能快照；`Config\module-runtime.json` 保存故障恢复元数据，不保存 PID。旧的 `%LocalAppData%\SyncWallpaper` 会在首次启动时迁移到新的数据目录；迁移完成后旧目录可以安全清除，当前 D 盘工作目录中的壁纸和配置不依赖它。
 
 安全诊断：
 
@@ -106,12 +111,15 @@ RC2 沿用安全的只读 Real-Time Soak 与 Accelerated 验收工具；诊断�
 3. 在“规则与匹配”查看证据链，确认没有使用显示器编号。
 4. 插拔 HDMI/DP/USB-C 或睡眠唤醒，等待防抖结束，检查日志和壁纸路径。
 5. 用相同型号无序列号显示器制造同分映射，软件应显示“需要确认”并保持当前壁纸。
+6. 在“规则与匹配”新建空白组合，确认它显示为未匹配；进入编辑器添加显示器角色和壁纸后保存，再验证拓扑变化时自动匹配。
+7. 在“窗口与布局”保存区域预设，启用 Window Engine 后按住 Shift 拖动一个普通测试窗口，确认只在松开时吸附且停用模块后不再响应。
+8. 在“任务栏与屏幕行为”启用副屏任务栏，确认每个副屏各出现一条任务栏；把同一应用的多个测试窗口移到副屏，验证分组菜单、切换/最小化、右键关闭、悬停实时预览和固定/取消固定。再开启自动隐藏，确认鼠标离开后只保留底边唤醒条且最大化工作区不被永久缩小。最后关闭模块，确认副屏条与独立进程消失。
 
 ## DisplayFusion Pro 对标路线
 
 当前版本已经完成壁纸/显示器识别基础层，并提供以下模块的本地基础实现。要达到 DisplayFusion Pro 的完整产品级对标，还需要继续完善 Explorer 级集成和逐项自动化验收：
 
-- 多显示器任务栏、任务栏布局和托盘行为。
+- 副屏任务栏 v3 已完成基础分组、固定项目、实时缩略图、时钟、自动隐藏和安全的 AppBar 工作区策略；后续仍需每显示器固定集、拖动排序、Jump List 和可配置布局。完整通知区镜像没有稳定公共 API，当前不会采用 Explorer 注入实现。
 - 窗口标题栏按钮、窗口移动/调整大小、跨屏定位与保存/恢复窗口布局。
 - 触发器系统（显示器连接、电源、登录/解锁、进程、网络等）与条件/动作编辑器。
 - 全局快捷键、窗口规则、应用启动与脚本动作。
@@ -127,10 +135,10 @@ RC2 沿用安全的只读 Real-Time Soak 与 Accelerated 验收工具；诊断�
 | 壁纸自动匹配（核心） | 开启且不可关闭 | 无；这是屏序的核心服务 |
 | Display Engine | 关闭 | 分辨率/刷新率/旋转/HDR/DPI 配置档案、CCD 两阶段应用和显示配置回滚 |
 | Audio Engine | 关闭 | 播放、通信、录音默认设备读取/切换和音频配置绑定 |
-| Window Engine | 关闭 | 窗口枚举、位置保存/恢复、混合 DPI 修正和窗口区域基础能力 |
+| Window Engine | 关闭 | 窗口枚举、位置保存/恢复、混合 DPI 修正，以及按稳定显示器身份保存的 Shift 拖动区域吸附 |
 | Automation | 关闭 | 触发器、动作、规则优先级、全局热键和自动化审计 |
 | Desktop Engine | 关闭 | 官方 Shell 桌面图标位置与视图设置保存/恢复 |
-| Taskbar Host | 关闭 | 独立多显示器任务栏、任务按钮、分组、固定项、缩略图、时钟和通知区 |
+| Taskbar Host | 关闭 | 独立副屏任务栏、窗口过滤与按屏归属、应用分组、逐窗口切换/关闭、DWM 实时预览、固定应用、时钟、自动隐藏和单副屏工作区预留 |
 | Shell Host | 关闭 | 标题栏按钮、Alt+Tab 管理以及未来的 Explorer 邻接功能 |
 | ScreenSaver Host | 关闭 | 多屏屏保宿主；不会影响 Windows 自己的屏保 |
 | Remote Host | 关闭 | 远程/本地 IPC 控制、认证和远程导入导出 |
@@ -138,13 +146,15 @@ RC2 沿用安全的只读 Real-Time Soak 与 Accelerated 验收工具；诊断�
 
 完整模式会开启全部可选模块；标准模式只开启 Display、Audio、Window、Automation、Desktop；自定义模式逐项控制。高风险独立宿主仍须在实际发布目录存在时才会启动，宿主崩溃只会让该模块进入 `Faulted`，核心壁纸服务继续运行。
 
+轻量模式还会停用主窗口的装饰性背景光效、把渲染缓存限制为 128 MiB，并在主窗口隐藏到托盘时只标记数据已变化；窗口重新显示时再合并刷新一次，避免后台反复重建整个界面。
+
 ## 已知限制
 
 - Windows 原生 IDesktopWallpaper 的位置模式是全局设置；本项目通过逐显示器精确尺寸预渲染降低差异，但系统可能仍受桌面合成器策略影响。
 - “识别显示器”当前提供状态提示和识别入口；A/B/C 的跨屏覆盖层与角色编辑器需要在后续 UI 迭代中补齐，匹配层已经拒绝自动猜测。
 - 托盘图标为程序运行时生成的轻量图标，XAML 内置矢量 Logo；独立多尺寸安装包图标可在后续安装器阶段补充。
-- 阶段 1 已加入 `SyncWallpaper.DisplayEngine`、`AudioEngine`、`WindowEngine`、`Automation` 和 `DesktopEngine`；其中显示器事务、音频端点枚举/配置流程、窗口位置恢复、触发器动作和桌面图标基础恢复仍受真实硬件与 Shell 会话验证范围限制。
+- 阶段 1 已加入 `SyncWallpaper.DisplayEngine`、`AudioEngine`、`WindowEngine`、`Automation` 和 `DesktopEngine`；窗口区域已经具备五种预设、稳定显示器身份绑定和 Shift 拖动生命周期，但自由绘制编辑器、跨区选择覆盖层和真实混合 DPI 拖动尚未完成。显示器事务、音频端点枚举/配置流程、窗口位置恢复、触发器动作和桌面图标基础恢复仍受真实硬件与 Shell 会话验证范围限制。
 - Windows 默认音频端点的 `PolicyConfig::SetDefaultEndpoint` 属于非公开接口，已隔离在 Windows 专用适配器中；兼容性检测或调用失败时会优雅降级，不阻塞壁纸/显示器核心流程。默认端点切换前应先保存当前音频配置。
 - HDR、DPI、旋转和非原样刷新率/源模式映射、真实混合 DPI、睡眠唤醒、Explorer 重启及高权限/UWP 窗口仍未达到 `Verified`。
-- 多显示器任务栏、标题栏按钮、Explorer 注入、远程控制、在线壁纸和完整屏保等高风险功能尚未实现；在对标矩阵核心功能全部达到 `Verified` 前，不声称完全对标 DisplayFusion Pro。
+- 副屏任务栏 v3 已实现分组、基础固定项、DWM 缩略图、时钟、底边自动隐藏和单副屏 AppBar 预留并保持非注入式；多副屏工作区会在 Shell 归属不可靠时回退为覆盖模式。通知区镜像、Jump List、标题栏按钮、远程控制、在线壁纸和完整屏保仍未完成。在对标矩阵核心功能全部达到 `Verified` 前，不声称完全对标 DisplayFusion Pro。
 - 应用依赖 Windows 10/11 的 WMI 与显示配置 API，其他平台不支持。

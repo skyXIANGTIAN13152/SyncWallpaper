@@ -1,6 +1,7 @@
 namespace SyncWallpaper.Core;
 
 public readonly record struct Int32Rect(int Left, int Top, int Width, int Height);
+public readonly record struct Int32Point(int X, int Y);
 
 public sealed class DisplayConfigurationProfile
 {
@@ -230,4 +231,33 @@ public sealed class WindowRestoreResult
     public int Applied { get; init; }
     public int Skipped { get; init; }
     public IReadOnlyList<string> Reasons { get; init; } = Array.Empty<string>();
+}
+
+public enum WindowZoneSnapStatus
+{
+    Applied,
+    Disabled,
+    NoWindow,
+    ElevatedWindow,
+    NoMonitor,
+    NoLayout,
+    AmbiguousMonitor,
+    NoZone,
+    MoveFailed
+}
+
+public sealed class WindowZoneSnapResult
+{
+    public WindowZoneSnapStatus Status { get; init; }
+    public bool Applied => Status == WindowZoneSnapStatus.Applied;
+    public string Message { get; init; } = string.Empty;
+    public string? LayoutId { get; init; }
+    public string? ZoneId { get; init; }
+    public Int32Rect? Bounds { get; init; }
+}
+
+public sealed class WindowZoneValidationResult
+{
+    public bool IsValid => Errors.Count == 0;
+    public IReadOnlyList<string> Errors { get; init; } = Array.Empty<string>();
 }

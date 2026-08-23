@@ -247,16 +247,20 @@ public sealed class MonitorDiscoveryService
         try
         {
             using var searcher = new ManagementObjectSearcher("root\\wmi", "SELECT InstanceName, SerialNumberID, ManufacturerName, ProductCodeID, UserFriendlyName FROM WmiMonitorID");
-            foreach (ManagementObject item in searcher.Get())
+            using var results = searcher.Get();
+            foreach (ManagementObject item in results)
             {
-                list.Add(new WmiInfo
+                using (item)
                 {
-                    InstanceName = item["InstanceName"]?.ToString() ?? string.Empty,
-                    SerialNumberId = ToUshortArray(item["SerialNumberID"]),
-                    ManufacturerName = DecodeChars(ToUshortArray(item["ManufacturerName"])),
-                    ProductCodeId = DecodeChars(ToUshortArray(item["ProductCodeID"])),
-                    UserFriendlyName = DecodeChars(ToUshortArray(item["UserFriendlyName"]))
-                });
+                    list.Add(new WmiInfo
+                    {
+                        InstanceName = item["InstanceName"]?.ToString() ?? string.Empty,
+                        SerialNumberId = ToUshortArray(item["SerialNumberID"]),
+                        ManufacturerName = DecodeChars(ToUshortArray(item["ManufacturerName"])),
+                        ProductCodeId = DecodeChars(ToUshortArray(item["ProductCodeID"])),
+                        UserFriendlyName = DecodeChars(ToUshortArray(item["UserFriendlyName"]))
+                    });
+                }
             }
         }
         catch (ManagementException) { return list; }

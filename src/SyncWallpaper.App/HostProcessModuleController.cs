@@ -27,6 +27,7 @@ public sealed class HostProcessModuleController : IModuleController, IModuleHeal
     private DateTime _lastHeartbeatUtc;
     private string _instanceId = string.Empty;
     private string? _lastError;
+    private string _hostDetail = string.Empty;
     private bool _stopping;
     private bool _faultNotified;
 
@@ -42,7 +43,17 @@ public sealed class HostProcessModuleController : IModuleController, IModuleHeal
 
     public bool IsRunning { get { lock (_gate) return _process is { HasExited: false }; } }
     public int? ProcessId { get { lock (_gate) return _process is { HasExited: false } process ? process.Id : null; } }
-    public string HookStatus => IsRunning ? $"独立进程；IPC 心跳={(_lastHeartbeatUtc == default ? "等待" : "正常")}" : "进程已退出";
+    public string HookStatus
+    {
+        get
+        {
+            lock (_gate)
+            {
+                if (_process is not { HasExited: false }) return "进程已退出";
+                return $"独立进程；IPC 心跳={(_lastHeartbeatUtc == default ? "等待" : "正常")}{(string.IsNullOrWhiteSpace(_hostDetail) ? string.Empty : "；" + _hostDetail)}";
+            }
+        }
+    }
     public string? LastError { get { lock (_gate) return _lastError; } }
     public string ModuleInstanceId { get { lock (_gate) return _instanceId; } }
     string IModuleHealth.InstanceId => ModuleInstanceId;
@@ -62,6 +73,7 @@ public sealed class HostProcessModuleController : IModuleController, IModuleHeal
             _stopping = false;
             _faultNotified = false;
             _lastError = null;
+            _hostDetail = string.Empty;
             _instanceId = Guid.NewGuid().ToString("N");
             _lastHeartbeatUtc = DateTime.UtcNow;
             ready = _ready = new TaskCompletionSource<ModuleIpcResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -139,9 +151,56 @@ public sealed class HostProcessModuleController : IModuleController, IModuleHeal
             return;
         }
         if (response.Type.Equals("heartbeat", StringComparison.OrdinalIgnoreCase)) _lastHeartbeatUtc = DateTime.UtcNow;
+        UpdateHostDetail(response.Payload);
         if (response.Type.Equals("ready", StringComparison.OrdinalIgnoreCase)) _ready?.TrySetResult(response);
         if (!string.IsNullOrWhiteSpace(response.RequestId) && _pending.TryRemove(response.RequestId, out var waiter)) waiter.TrySetResult(response);
         _log?.Invoke($"{_module} IPC: {response.Type} {(response.Success ? "成功" : response.ErrorCode ?? "失败")}");
+    }
+
+    private void UpdateHostDetail(JsonElement? payload)
+    {
+        if (_module != SyncWallpaperModule.TaskbarHost || payload is not { ValueKind: JsonValueKind.Object } value) return;
+        try
+        {
+            var state = value.TryGetProperty("state", out var stateNode) ? stateNode.GetString() : null;
+            var bars = value.TryGetProperty("barCount", out var barsNode) ? barsNode.GetInt32() : 0;
+            var tasks = value.TryGetProperty("taskCount", out var tasksNode) ? tasksNode.GetInt32() : 0;
+            var hook = value.TryGetProperty("hookActive", out var hookNode) && hookNode.GetBoolean();
+            var explorer = value.TryGetProperty("explorerProcessId", out var explorerNode) ? explorerNode.GetInt32() : 0;
+            var groups = 0;
+            var pinned = 0;
+            var autoHide = false;
+            var hidden = 0;
+            var reserved = 0;
+            string? placementError = null;
+            if (value.TryGetProperty("bars", out var barDetails) && barDetails.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var bar in barDetails.EnumerateArray())
+                {
+                    if (bar.TryGetProperty("groupCount", out var groupNode) && groupNode.TryGetInt32(out var groupCount))
+                        groups += Math.Max(0, groupCount);
+                    if (bar.TryGetProperty("pinnedCount", out var pinnedNode) && pinnedNode.TryGetInt32(out var pinnedCount))
+                        pinned = Math.Max(pinned, pinnedCount);
+                    if (bar.TryGetProperty("autoHide", out var autoHideNode) && autoHideNode.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                        autoHide |= autoHideNode.GetBoolean();
+                    if (bar.TryGetProperty("isHidden", out var hiddenNode) && hiddenNode.ValueKind == JsonValueKind.True)
+                        hidden++;
+                    if (bar.TryGetProperty("workAreaReserved", out var reservedNode) && reservedNode.ValueKind == JsonValueKind.True)
+                        reserved++;
+                    if (bar.TryGetProperty("placementError", out var placementNode) && placementNode.ValueKind == JsonValueKind.String)
+                        placementError ??= placementNode.GetString();
+                }
+            }
+            var error = value.TryGetProperty("lastError", out var errorNode) && errorNode.ValueKind == JsonValueKind.String ? errorNode.GetString() : null;
+            lock (_gate)
+            {
+                _hostDetail = $"状态={state ?? "未知"}，副屏条={bars}，任务={tasks}，分组={groups}，固定项={pinned}，自动隐藏={(autoHide ? $"是（隐藏 {hidden}）" : "否")}，工作区预留={reserved}/{bars}，Hook={(hook ? "已注册" : "未注册")}，Explorer PID={explorer}";
+                if (!string.IsNullOrWhiteSpace(placementError)) _lastError = placementError;
+                if (!string.IsNullOrWhiteSpace(error)) _lastError = error;
+            }
+        }
+        catch (InvalidOperationException) { }
+        catch (FormatException) { }
     }
 
     private async Task MonitorHeartbeatAsync(CancellationToken token)
@@ -251,6 +310,7 @@ public sealed class HostProcessModuleController : IModuleController, IModuleHeal
             {
                 _ioCts?.Cancel(); _ioCts?.Dispose(); _ioCts = null;
                 _process = null; _ready = null; _stopping = false; _faultNotified = false;
+                _hostDetail = string.Empty;
                 foreach (var waiter in _pending.Values) waiter.TrySetCanceled();
                 _pending.Clear();
             }

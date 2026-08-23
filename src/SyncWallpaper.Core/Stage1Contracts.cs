@@ -82,6 +82,14 @@ public interface IWindowPlatform
     bool TryStartApplication(string executablePath, string arguments);
 }
 
+public interface IWindowZonePlatform
+{
+    WindowPositionSnapshot? TryGetWindow(IntPtr handle);
+    Int32Point? GetCursorPosition();
+    bool IsShiftPressed();
+    bool TrySetPosition(WindowPositionSnapshot window, Int32Rect physicalBounds, bool maximize);
+}
+
 public interface IWindowIdentityMatcher
 {
     bool IsMatch(WindowIdentity saved, WindowIdentity current, out WindowMatchKind? matchedBy);

@@ -23,18 +23,21 @@ public sealed class AppRuntime : IDisposable
     public LibraryDocument Library { get; private set; }
     public MonitorProfilesDocument MonitorProfiles { get; private set; }
     public WindowPositionProfilesDocument WindowProfiles { get; private set; }
+    public WindowZoneLayoutsDocument WindowZoneLayouts { get; private set; }
     public TriggerDocument Triggers { get; private set; }
     public DisplayConfigurationDocument DisplayConfigurations { get; }
     public AudioProfilesDocument AudioProfiles { get; private set; }
     public DesktopIconProfilesDocument DesktopIconProfiles { get; private set; }
     public ModulePerformanceDocument ModulePerformance { get; private set; }
     public ModuleRuntimeDocument ModuleRuntime { get; private set; }
+    public TaskbarHostPreferences TaskbarPreferences { get; private set; }
     public IReadOnlyList<MonitorIdentity> Monitors { get; private set; } = Array.Empty<MonitorIdentity>();
     public MatchResult? LastMatch { get; private set; }
     public DisplayConfigurationApplyResult? LastDisplayTransaction { get; private set; }
     public WallpaperTransactionStatus LastWallpaperTransaction => _apply.LastTransaction;
     public AudioConfigurationResult? LastAudioResult { get; private set; }
     public WindowRestoreResult? LastWindowRestore { get; private set; }
+    public WindowZoneSnapResult? LastWindowZoneSnap { get; private set; }
     public DesktopIconRestoreResult? LastDesktopRestore { get; private set; }
     public IReadOnlyList<AutomationExecutionResult> LastAutomationResults { get; private set; } = Array.Empty<AutomationExecutionResult>();
     public UpdateCheckResult? LastUpdateResult { get; private set; }
@@ -59,6 +62,7 @@ public sealed class AppRuntime : IDisposable
     private readonly ProfileMatcher _matcher = new();
     private readonly LogService _log;
     private readonly WallpaperLibraryService _library;
+    private readonly WallpaperRenderService _wallpaperRenderer;
     private readonly WallpaperApplyService _apply;
     private readonly DisplayChangeCoordinator _coordinator;
     private readonly ExplorerRecoveryCoordinator _explorerRecovery;
@@ -73,6 +77,7 @@ public sealed class AppRuntime : IDisposable
     private IAudioConfigurationEngine? _audioEngine;
     private WindowsWindowPlatform? _windowPlatform;
     private WindowsWindowEventSource? _windowEvents;
+    private WindowZoneSnapController? _windowZoneController;
     private readonly WindowsResourceDiagnosticsProvider _resourceDiagnostics = new();
     private WindowLayoutEngine? _windowEngine;
     private WindowsShellDesktopIconProvider? _desktopIconProvider;
@@ -101,6 +106,14 @@ public sealed class AppRuntime : IDisposable
         Paths = new DataPaths(dataRoot);
         Store = new ConfigurationStore(Paths);
         Settings = Store.Load("settings.json", new AppSettings());
+        var settingsWasLegacy = Settings.SchemaVersion < AppSettingsMigrator.CurrentSchemaVersion;
+        var settingsChanged = AppSettingsMigrator.Migrate(Settings);
+        var startupActuallyEnabled = _startup.IsEnabled;
+        if (Settings.StartWithWindows != startupActuallyEnabled)
+        {
+            Settings.StartWithWindows = startupActuallyEnabled;
+            settingsChanged = true;
+        }
         var loadedProfiles = Store.Load("profiles.json", new ProfilesDocument());
         var loadedProfilesSchema = loadedProfiles.SchemaVersion;
         Profiles = ProfileSchemaMigrator.Migrate(loadedProfiles);
@@ -112,16 +125,36 @@ public sealed class AppRuntime : IDisposable
         if (!string.Equals(Settings.DataRoot, Paths.Root, StringComparison.OrdinalIgnoreCase))
         {
             Settings.DataRoot = Paths.Root;
-            Store.Save("settings.json", Settings);
+            settingsChanged = true;
         }
         MonitorProfiles = Store.Load("monitor-profiles.json", new MonitorProfilesDocument());
         WindowProfiles = Store.Load("window-profiles.json", new WindowPositionProfilesDocument());
+        WindowZoneLayouts = Store.Load("window-zones.json", new WindowZoneLayoutsDocument());
+        WindowZoneLayouts.Layouts ??= new List<WindowZoneLayout>();
+        WindowZoneLayouts.GapPixels = Math.Clamp(WindowZoneLayouts.GapPixels, 0, 96);
         Triggers = Store.Load("triggers.json", new TriggerDocument());
         AudioProfiles = Store.Load("audio-profiles.json", new AudioProfilesDocument());
         DesktopIconProfiles = Store.Load("desktop-icons.json", new DesktopIconProfilesDocument());
         ModulePerformance = Store.Load("module-performance.json", new ModulePerformanceDocument());
         ModuleRuntime = Store.Load("module-runtime.json", new ModuleRuntimeDocument());
-        Settings.Modules ??= new ModuleConfiguration();
+        TaskbarPreferences = TaskbarHostPreferences.Normalize(Store.Load(
+            TaskbarHostPreferences.FileName,
+            new TaskbarHostPreferences(),
+            TaskbarHostPreferences.Validate));
+        if (Settings.Modules is null)
+        {
+            Settings.Modules = new ModuleConfiguration();
+            settingsChanged = true;
+        }
+        if (settingsWasLegacy && Settings.Modules.Mode == ModuleMode.Lightweight && !Settings.LowPerformanceMode)
+        {
+            // V1 exposed an unbound checkbox, so false was never a deliberate
+            // user choice. Lightweight installations migrate to the real
+            // low-resource behavior.
+            Settings.LowPerformanceMode = true;
+            settingsChanged = true;
+        }
+        if (settingsChanged) Store.Save("settings.json", Settings);
         if (Settings.SafeMode) { Settings.AutoMatchEnabled = false; StatusText = "安全模式"; LastMessage = Settings.SafeModeReason; }
 
         _log = new LogService(Paths);
@@ -138,7 +171,9 @@ public sealed class AppRuntime : IDisposable
         }
         _library = new WallpaperLibraryService(Store);
         Library = _library.Refresh().Document;
-        _apply = new WallpaperApplyService(new WallpaperRenderService(Paths), message => _log.Write("Wallpaper", message));
+        _wallpaperRenderer = new WallpaperRenderService(Paths);
+        _wallpaperRenderer.ConfigureCacheLimit(Settings.LowPerformanceMode ? 128L * 1024 * 1024 : 512L * 1024 * 1024);
+        _apply = new WallpaperApplyService(_wallpaperRenderer, message => _log.Write("Wallpaper", message));
         _explorerRecovery = new ExplorerRecoveryCoordinator(
             async token => { if (token.IsCancellationRequested) return; await MatchAndApplyAsync(); },
             message => _log.Warn("ExplorerRecovery", message));
@@ -216,7 +251,7 @@ public sealed class AppRuntime : IDisposable
                 _ => { EnsureWindowEngine(); _windowModuleRunning = true; return Task.CompletedTask; },
                 _ => { DisposeWindowEngine(); _windowModuleRunning = false; return Task.CompletedTask; },
                 () => _windowModuleRunning, () => _windowModuleRunning ? Environment.ProcessId : null,
-                () => _windowEvents?.IsActive == true ? "WinEventHook 已注册" : "WinEventHook 已注销", () => null));
+                () => _windowEvents?.IsActive == true ? "WinEventHook + Shift 区域吸附已注册" : "WinEventHook 与区域吸附已注销", () => null));
 
         Modules.Register(new ModuleDefinition(SyncWallpaperModule.Automation, "Automation", false, Array.Empty<SyncWallpaperModule>()),
             new DelegateModuleController(
@@ -298,10 +333,25 @@ public sealed class AppRuntime : IDisposable
         _windowPlatform = platform;
         _windowEvents = events;
         _windowEngine = new WindowLayoutEngine(platform);
+        _windowZoneController = new WindowZoneSnapController(
+            events,
+            platform,
+            () => WindowZoneLayouts,
+            () => Monitors,
+            result =>
+            {
+                LastWindowZoneSnap = result;
+                if (result.Applied) _log.Info("WindowZones", result.Message);
+                else if (result.Status is WindowZoneSnapStatus.AmbiguousMonitor or WindowZoneSnapStatus.ElevatedWindow or WindowZoneSnapStatus.MoveFailed)
+                    _log.Warn("WindowZones", result.Message);
+                RaiseChanged();
+            });
     }
 
     private void DisposeWindowEngine()
     {
+        _windowZoneController?.Dispose();
+        _windowZoneController = null;
         if (_windowEvents is not null && _windowEventHandler is not null) _windowEvents.EventReceived -= _windowEventHandler;
         _windowEventHandler = null;
         _windowEvents?.Dispose();
@@ -386,9 +436,22 @@ public sealed class AppRuntime : IDisposable
     public async Task ApplyModuleModeAsync(ModuleMode mode)
     {
         Settings.Modules.ApplyPreset(mode);
+        if (mode == ModuleMode.Lightweight)
+        {
+            Settings.LowPerformanceMode = true;
+            _wallpaperRenderer.ConfigureCacheLimit(128L * 1024 * 1024);
+        }
         await Modules.StopAllAsync().ConfigureAwait(false);
         await Modules.StartEnabledAsync(Settings.Modules).ConfigureAwait(false);
         RecordModulePerformance();
+        Store.Save("settings.json", Settings);
+        RaiseChanged();
+    }
+
+    public void SetLowPerformanceMode(bool enabled)
+    {
+        Settings.LowPerformanceMode = enabled;
+        _wallpaperRenderer.ConfigureCacheLimit(enabled ? 128L * 1024 * 1024 : 512L * 1024 * 1024);
         Store.Save("settings.json", Settings);
         RaiseChanged();
     }
@@ -577,7 +640,7 @@ public sealed class AppRuntime : IDisposable
         }
         Profiles.Profiles.Add(profile);
         EnsureLaptopFallbackProfile(monitors);
-        Settings.ActiveProfileId = profile.Id;
+        Settings.EditingProfileId = profile.Id;
         Store.Save("profiles.json", Profiles);
         Store.Save("settings.json", Settings);
     }
@@ -657,12 +720,10 @@ public sealed class AppRuntime : IDisposable
         await MatchAndApplyAsync();
     }
 
-    public async Task DetectAsync()
+    public Task DetectAsync()
     {
-        _coordinator.Signal();
-        await Task.Delay(50);
-        Monitors = _discovery.Discover();
-        RaiseChanged();
+        _coordinator.Signal(manual: true);
+        return Task.CompletedTask;
     }
 
     public async Task ReapplyAsync()
@@ -683,47 +744,54 @@ public sealed class AppRuntime : IDisposable
     private async Task MatchAndApplyAsync(bool manual = false, WallpaperProfile? preferredProfile = null)
     {
         if (Monitors.Count == 0) { StatusText = "未发现显示器"; LastMessage = "没有活动显示路径"; RaiseChanged(); return; }
-        LastMatch = preferredProfile is null
+        var match = preferredProfile is null
             ? _matcher.Match(Monitors, Profiles.Profiles)
             : _matcher.Match(Monitors, new[] { preferredProfile });
-        _log.Write("Match", LastMatch.Message, LastMatch.Profile?.Name, Monitors.Count, LastMatch.Confidence);
-        if (LastMatch.Status == MatchStatus.Ambiguous)
+        _log.Write("Match", match.Message, match.Profile?.Name, Monitors.Count, match.Confidence);
+        await ApplyMatchedWallpaperAsync(match, manual);
+    }
+
+    private async Task<bool> ApplyMatchedWallpaperAsync(MatchResult match, bool manual)
+    {
+        LastMatch = match;
+        if (match.Status == MatchStatus.Ambiguous)
         {
-            StatusText = "需要确认"; LastMessage = LastMatch.Message; RaiseChanged(); return;
+            StatusText = "需要确认"; LastMessage = match.Message; RaiseChanged(); return false;
         }
-        if (LastMatch.Status == MatchStatus.NoMatch)
+        if (match.Status == MatchStatus.NoMatch)
         {
-            StatusText = "保持当前壁纸"; LastMessage = LastMatch.Message; RaiseChanged(); return;
+            StatusText = "保持当前壁纸"; LastMessage = match.Message; RaiseChanged(); return false;
         }
-        if (!LastMatch.CanAutoApply)
+        if (!match.CanAutoApply)
         {
             StatusText = "需要确认";
-            LastMessage = string.IsNullOrWhiteSpace(LastMatch.Message) ? "匹配置信度不足，未自动应用壁纸" : LastMatch.Message;
+            LastMessage = string.IsNullOrWhiteSpace(match.Message) ? "匹配置信度不足，未自动应用壁纸" : match.Message;
             RaiseChanged();
-            return;
+            return false;
+        }
+        if (!manual && !WallpaperProfileApplyPolicy.IsComplete(match.Profile))
+        {
+            StatusText = "保持当前壁纸";
+            LastMessage = $"已匹配“{match.Profile?.Name}”，但显示器或壁纸配置尚未完整";
+            RaiseChanged();
+            return false;
         }
         try
         {
-            var result = await RunOnDispatcherAsync(() => _apply.ApplyAsync(LastMatch, Library.Assets, Paths, generation: _coordinator.Generation, manual: manual));
+            var result = await RunOnDispatcherAsync(() => _apply.ApplyAsync(match, Library.Assets, Paths, generation: _coordinator.Generation, manual: manual));
             LastMessage = result.Message; StatusText = result.Success ? "运行中" : "应用未完成";
-            if (result.Success)
-            {
-                LastAppliedAt = DateTime.Now;
-                LastMatch.Profile!.LastAppliedAt = DateTime.UtcNow;
-                LastMatch.Profile.LastSuccessfulMatchAt = DateTime.UtcNow;
-                foreach (var role in LastMatch.Profile.Roles)
-                {
-                    if (LastMatch.RoleMatches.TryGetValue(role.Role, out var monitor))
-                    {
-                        role.LastSuccessfulMatchAt = DateTime.UtcNow;
-                        role.LastKnownMonitorDevicePath = monitor.MonitorDevicePath;
-                    }
-                }
-                Store.Save("profiles.json", Profiles);
-            }
+            if (result.Success) RecordSuccessfulWallpaperMatch(match);
+            RaiseChanged();
+            return result.Success;
         }
-        catch (Exception ex) { StatusText = "应用失败"; LastMessage = ex.Message; _log.Write("Error", ex.ToString()); }
-        RaiseChanged();
+        catch (Exception ex)
+        {
+            StatusText = "应用失败";
+            LastMessage = ex.Message;
+            _log.Write("Error", ex.ToString());
+            RaiseChanged();
+            return false;
+        }
     }
 
     public DisplayConfigurationProfile CaptureDisplayProfile(string name)
@@ -869,6 +937,89 @@ public sealed class AppRuntime : IDisposable
         return removed;
     }
 
+    public WindowZoneLayout ConfigureWindowZones(string monitorStableId, WindowZonePreset preset, int gapPixels)
+    {
+        if (string.IsNullOrWhiteSpace(monitorStableId)) throw new ArgumentException("请选择显示器。", nameof(monitorStableId));
+        var monitor = Monitors.FirstOrDefault(x => x.StableId.Equals(monitorStableId, StringComparison.OrdinalIgnoreCase));
+        if (monitor is null) throw new InvalidOperationException("找不到所选活动显示器，请先重新检测显示器。");
+
+        var layout = WindowZoneLayoutFactory.Create($"{monitor.DisplayLabel} · {WindowZoneLayoutFactory.PresetName(preset)}", monitor, preset);
+        var validation = WindowZoneLayoutValidator.Validate(layout);
+        if (!validation.IsValid) throw new InvalidOperationException(string.Join("；", validation.Errors));
+
+        var existing = WindowZoneLayouts.Layouts.FirstOrDefault(x =>
+            !string.IsNullOrWhiteSpace(x.TargetMonitor?.StableId)
+            && x.TargetMonitor.StableId.Equals(monitor.StableId, StringComparison.OrdinalIgnoreCase)
+            && x.TargetMonitor.StableIdSource == monitor.StableIdSource);
+        if (existing is not null)
+        {
+            layout.Id = existing.Id;
+            layout.CreatedAt = existing.CreatedAt;
+            WindowZoneLayouts.Layouts.Remove(existing);
+        }
+        WindowZoneLayouts.GapPixels = Math.Clamp(gapPixels, 0, 96);
+        WindowZoneLayouts.Layouts.Add(layout);
+        Store.Save("window-zones.json", WindowZoneLayouts);
+        LastWindowZoneSnap = null;
+        _log.Info("WindowZones", $"已保存 {monitor.DisplayLabel} 的“{WindowZoneLayoutFactory.PresetName(preset)}”区域布局，共 {layout.Zones.Count} 个区域");
+        RaiseChanged();
+        return layout;
+    }
+
+    public bool DeleteWindowZones(string monitorStableId)
+    {
+        var removed = WindowZoneLayouts.Layouts.RemoveAll(x =>
+            x.TargetMonitor is not null
+            && x.TargetMonitor.StableId.Equals(monitorStableId, StringComparison.OrdinalIgnoreCase)) > 0;
+        if (removed)
+        {
+            Store.Save("window-zones.json", WindowZoneLayouts);
+            _log.Info("WindowZones", "已删除所选显示器的窗口区域布局。");
+            RaiseChanged();
+        }
+        return removed;
+    }
+
+    public void SetShiftDragZonesEnabled(bool enabled)
+    {
+        WindowZoneLayouts.ShiftDragEnabled = enabled;
+        Store.Save("window-zones.json", WindowZoneLayouts);
+        _log.Info("WindowZones", enabled ? "已启用 Shift 拖动吸附。" : "已关闭 Shift 拖动吸附。");
+        RaiseChanged();
+    }
+
+    public bool IsWindowZoneEngineRunning => IsModuleRunning(SyncWallpaperModule.WindowEngine);
+    public bool IsTaskbarHostRunning => IsModuleRunning(SyncWallpaperModule.TaskbarHost);
+
+    public async Task UpdateTaskbarPreferencesAsync(bool autoHide, bool reserveWorkArea)
+    {
+        TaskbarPreferences = TaskbarHostPreferences.Normalize(new TaskbarHostPreferences
+        {
+            AutoHide = autoHide,
+            ReserveWorkArea = reserveWorkArea,
+            ShowPinnedItems = TaskbarPreferences.ShowPinnedItems,
+            ShowClock = TaskbarPreferences.ShowClock,
+            Height = TaskbarPreferences.Height,
+            RevealThickness = TaskbarPreferences.RevealThickness,
+            HideDelayMilliseconds = TaskbarPreferences.HideDelayMilliseconds
+        });
+        Store.Save(TaskbarHostPreferences.FileName, TaskbarPreferences);
+
+        var restart = IsTaskbarHostRunning;
+        if (restart)
+        {
+            await Modules.StopAsync(SyncWallpaperModule.TaskbarHost).ConfigureAwait(false);
+            await Modules.StartAsync(SyncWallpaperModule.TaskbarHost).ConfigureAwait(false);
+            RecordModulePerformance();
+        }
+        _log.Info("Taskbar", TaskbarPreferences.AutoHide
+            ? "已启用副屏任务栏自动隐藏；工作区预留已关闭。"
+            : TaskbarPreferences.ReserveWorkArea
+                ? "副屏任务栏已使用 AppBar 预留工作区。"
+                : "副屏任务栏已使用覆盖模式。" );
+        RaiseChanged();
+    }
+
     public DesktopIconProfile CaptureDesktopIconProfile(string name)
     {
         RequireModule(SyncWallpaperModule.DesktopEngine);
@@ -938,8 +1089,8 @@ public sealed class AppRuntime : IDisposable
                     var display = await ApplyDisplayProfileAsync(action.Argument, true);
                     return new() { Success = display.Status == DisplayConfigurationTransactionStatus.Applied, Message = display.Message };
                 case AutomationActionType.ApplyWallpaperProfile:
-                    Settings.ActiveProfileId = action.Argument; Store.Save("settings.json", Settings); await MatchAndApplyAsync();
-                    return new() { Success = true, Message = "壁纸配置已执行。" };
+                    var wallpaperApplied = await ApplyWallpaperProfileAsync(action.Argument);
+                    return new() { Success = wallpaperApplied, Message = wallpaperApplied ? "壁纸配置已执行。" : LastMessage };
                 case AutomationActionType.ApplyAudioProfile:
                     if (!IsPersistentChangeApproved(context)) return new() { Success = false, Message = "自动化音频切换需要显式确认，已跳过。" };
                     var audio = await ApplyAudioProfileAsync(action.Argument);
@@ -981,7 +1132,7 @@ public sealed class AppRuntime : IDisposable
         switch (action.Type)
         {
             case FunctionActionType.LoadWallpaperProfile:
-                Settings.ActiveProfileId = action.Argument; Store.Save("settings.json", Settings); await MatchAndApplyAsync(); break;
+                await ApplyWallpaperProfileAsync(action.Argument); break;
             case FunctionActionType.LoadMonitorProfile:
                 var profile = MonitorProfiles.Profiles.FirstOrDefault(p => p.Id.Equals(action.Argument, StringComparison.OrdinalIgnoreCase));
                 if (profile is not null) _monitorConfiguration.TryApply(profile, Monitors);
@@ -1023,7 +1174,7 @@ public sealed class AppRuntime : IDisposable
     public void ApplyManualDisplayAssignments(IReadOnlyList<ManualDisplayAssignment> assignments)
     {
         if (assignments.Count == 0) return;
-        var profile = Profiles.Profiles.FirstOrDefault(x => string.Equals(x.Id, Settings.ActiveProfileId, StringComparison.OrdinalIgnoreCase))
+        var profile = Profiles.Profiles.FirstOrDefault(x => string.Equals(x.Id, Settings.EditingProfileId, StringComparison.OrdinalIgnoreCase))
             ?? Profiles.Profiles.FirstOrDefault(x => x.ExpectedMonitorCount == assignments.Count)
             ?? ProfileTemplates.Custom("手动确认配置", assignments.Select(x => x.Role));
         if (!Profiles.Profiles.Contains(profile)) Profiles.Profiles.Add(profile);
@@ -1076,7 +1227,7 @@ public sealed class AppRuntime : IDisposable
                 Notes = "用户在 A/B/C 识别界面确认"
             });
         }
-        Settings.ActiveProfileId = profile.Id;
+        Settings.EditingProfileId = profile.Id;
         Store.Save("profiles.json", Profiles); Store.Save("settings.json", Settings);
         LastMessage = $"已保存 {profile.Roles.Count} 个手动角色绑定"; RaiseChanged();
     }
@@ -1103,21 +1254,32 @@ public sealed class AppRuntime : IDisposable
             throw new InvalidOperationException("当前显示器组合仍有歧义。请先完成 A / B / C 显示器识别，再保存壁纸组合。");
 
         var sourceProfile = LastMatch?.Profile
-            ?? Profiles.Profiles.FirstOrDefault(x => string.Equals(x.Id, Settings.ActiveProfileId, StringComparison.OrdinalIgnoreCase));
+            ?? Profiles.Profiles.FirstOrDefault(x => string.Equals(x.Id, Settings.EditingProfileId, StringComparison.OrdinalIgnoreCase));
         var assignments = new List<(MonitorIdentity Monitor, string Role, MonitorRoleBinding? Source)>();
         var usedRoles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var monitor in Monitors)
         {
-            var role = FindMappedRole(LastMatch, monitor);
+            var mappedBinding = FindMappedBinding(LastMatch, monitor);
+            var role = mappedBinding?.Role;
             if (string.IsNullOrWhiteSpace(role))
                 role = monitor.IsInternal ? "Laptop" : monitor.Width >= monitor.Height ? "Landscape" : "Portrait";
 
             // Geometry is only a fallback for unique roles.  Two same-shaped
             // displays without an explicit role must be confirmed by the user.
-            if (!usedRoles.Add(role))
-                throw new InvalidOperationException("当前有多个显示器无法唯一分配逻辑角色。请先打开“显示器识别”手动确认后再保存。");
-            var source = sourceProfile?.Roles.FirstOrDefault(x => x.Role.Equals(role, StringComparison.OrdinalIgnoreCase));
+            if (mappedBinding is null)
+            {
+                if (!usedRoles.Add(role))
+                    throw new InvalidOperationException("当前有多个显示器无法唯一分配逻辑角色。请先打开“显示器识别”手动确认后再保存。");
+            }
+            else
+            {
+                // Explicit RoleId mappings may share a logical role name, but
+                // an unmatched fallback must not silently reuse that name.
+                usedRoles.Add(role);
+            }
+            var source = mappedBinding
+                ?? sourceProfile?.Roles.FirstOrDefault(x => x.Role.Equals(role, StringComparison.OrdinalIgnoreCase));
             assignments.Add((monitor, role, source));
         }
 
@@ -1160,13 +1322,60 @@ public sealed class AppRuntime : IDisposable
         }
 
         Profiles.Profiles.Add(profile);
-        Settings.ActiveProfileId = profile.Id;
+        Settings.EditingProfileId = profile.Id;
         Store.Save("profiles.json", Profiles);
         Store.Save("settings.json", Settings);
         LastMessage = $"已保存壁纸组合“{profile.Name}”：{profile.Roles.Count} 台显示器";
         _log.Info("Config", LastMessage);
         RaiseChanged();
         return profile;
+    }
+
+    public WallpaperProfile CreateBlankWallpaperProfile(string? name)
+    {
+        var priority = Profiles.Profiles.Count == 0 ? 100 : Profiles.Profiles.Max(x => x.Priority) + 10;
+        var profile = WallpaperProfileEditingService.CreateBlank(name, priority);
+        Profiles.Profiles.Add(profile);
+        Settings.EditingProfileId = profile.Id;
+        Store.Save("profiles.json", Profiles);
+        Store.Save("settings.json", Settings);
+        LastMessage = $"已新建空白组合“{profile.Name}”，可继续添加显示器角色和壁纸";
+        _log.Info("Config", LastMessage);
+        RaiseChanged();
+        return profile;
+    }
+
+    public WallpaperProfile? FindWallpaperProfile(string profileId)
+        => Profiles.Profiles.FirstOrDefault(x => x.Id.Equals(profileId, StringComparison.OrdinalIgnoreCase));
+
+    public void UpdateWallpaperProfile(string profileId, WallpaperProfileEditDraft draft)
+    {
+        var profile = FindWallpaperProfile(profileId) ?? throw new InvalidOperationException("找不到要编辑的壁纸组合。");
+        foreach (var role in draft.Roles)
+        {
+            if (string.IsNullOrWhiteSpace(role.WallpaperAssetId))
+            {
+                role.WallpaperPath = string.Empty;
+                continue;
+            }
+            var asset = Library.Assets.FirstOrDefault(x => x.Id.Equals(role.WallpaperAssetId, StringComparison.OrdinalIgnoreCase) && !x.IsMissing);
+            if (asset is null) throw new InvalidOperationException($"逻辑角色“{role.Role}”选择的壁纸不存在，请刷新档案库后重新选择。");
+            var path = ManagedAssetPath(asset, Paths.Root);
+            if (!File.Exists(path)) throw new InvalidOperationException($"壁纸“{asset.DisplayName}”的文件不存在。");
+            role.WallpaperPath = path;
+        }
+
+        var wasMatched = LastMatch?.Profile?.Id.Equals(profile.Id, StringComparison.OrdinalIgnoreCase) == true;
+        WallpaperProfileEditingService.Apply(profile, draft);
+        Settings.EditingProfileId = profile.Id;
+        if (wasMatched) LastMatch = null;
+        Store.Save("profiles.json", Profiles);
+        Store.Save("settings.json", Settings);
+        LastMessage = profile.Roles.Count == 0
+            ? $"已保存空白组合“{profile.Name}”"
+            : $"已更新壁纸组合“{profile.Name}”：{profile.Roles.Count} 个逻辑角色";
+        _log.Info("Config", LastMessage);
+        RaiseChanged();
     }
 
     /// <summary>Applies one saved wallpaper combination to the current topology.</summary>
@@ -1181,33 +1390,9 @@ public sealed class AppRuntime : IDisposable
         // promote the profile, rewrite its modified time, or change the
         // user's selected row.  The next topology change is evaluated by the
         // normal matcher across every saved profile.
-        LastMatch = _matcher.Match(Monitors, new[] { profile });
-        _log.Write("Match", $"用户选择壁纸组合：{profile.Name}；{LastMatch.Message}", profile.Name, Monitors.Count, LastMatch.Confidence);
-        if (LastMatch.Status == MatchStatus.Ambiguous || LastMatch.Status == MatchStatus.NoMatch || !LastMatch.CanAutoApply)
-        {
-            StatusText = LastMatch.Status == MatchStatus.Ambiguous ? "需要确认" : "保持当前壁纸";
-            LastMessage = LastMatch.Message;
-            RaiseChanged();
-            return false;
-        }
-
-        try
-        {
-            var result = await RunOnDispatcherAsync(() => _apply.ApplyAsync(LastMatch, Library.Assets, Paths, generation: _coordinator.Generation, manual: true));
-            LastMessage = result.Message;
-            StatusText = result.Success ? "运行中" : "应用未完成";
-            if (result.Success) RecordSuccessfulWallpaperMatch(LastMatch);
-            RaiseChanged();
-            return result.Success;
-        }
-        catch (Exception ex)
-        {
-            StatusText = "应用失败";
-            LastMessage = ex.Message;
-            _log.Write("Error", ex.ToString());
-            RaiseChanged();
-            return false;
-        }
+        var match = _matcher.Match(Monitors, new[] { profile });
+        _log.Write("Match", $"用户选择壁纸组合：{profile.Name}；{match.Message}", profile.Name, Monitors.Count, match.Confidence);
+        return await ApplyMatchedWallpaperAsync(match, manual: true);
     }
 
     /// <summary>Renames a saved wallpaper combination without changing its bindings.</summary>
@@ -1237,15 +1422,17 @@ public sealed class AppRuntime : IDisposable
         Profiles.Profiles.RemoveAt(index);
         if (LastMatch?.Profile?.Id.Equals(removed.Id, StringComparison.OrdinalIgnoreCase) == true)
             LastMatch = null;
-        if (string.Equals(Settings.ActiveProfileId, removed.Id, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(Settings.EditingProfileId, removed.Id, StringComparison.OrdinalIgnoreCase))
         {
-            Settings.ActiveProfileId = Profiles.Profiles
+            Settings.EditingProfileId = Profiles.Profiles
                 .Where(x => x.Enabled)
                 .OrderByDescending(x => x.Priority)
                 .ThenByDescending(x => x.ModifiedAt)
                 .Select(x => (string?)x.Id)
                 .FirstOrDefault();
         }
+        if (string.Equals(Settings.LastMatchedProfileId, removed.Id, StringComparison.OrdinalIgnoreCase))
+            Settings.LastMatchedProfileId = null;
         Store.Save("profiles.json", Profiles);
         Store.Save("settings.json", Settings);
         LastMessage = $"已删除壁纸组合“{removed.Name}”";
@@ -1254,13 +1441,18 @@ public sealed class AppRuntime : IDisposable
         return true;
     }
 
-    private static string? FindMappedRole(MatchResult? match, MonitorIdentity monitor)
+    private static MonitorRoleBinding? FindMappedBinding(MatchResult? match, MonitorIdentity monitor)
     {
-        if (match is null) return null;
-        return match.RoleMatches.FirstOrDefault(x =>
-            (!string.IsNullOrWhiteSpace(monitor.MonitorDevicePath) && x.Value.MonitorDevicePath.Equals(monitor.MonitorDevicePath, StringComparison.OrdinalIgnoreCase))
-            || (!string.IsNullOrWhiteSpace(monitor.StableId) && x.Value.StableId.Equals(monitor.StableId, StringComparison.OrdinalIgnoreCase))
-            || (monitor.HasUsableSerial && x.Value.HasUsableSerial && x.Value.SerialKey.Equals(monitor.SerialKey, StringComparison.OrdinalIgnoreCase))).Key;
+        if (match?.Profile is null) return null;
+        foreach (var binding in match.Profile.Roles)
+        {
+            if (!match.TryGetMonitor(binding, out var mapped)) continue;
+            if ((!string.IsNullOrWhiteSpace(monitor.MonitorDevicePath) && mapped.MonitorDevicePath.Equals(monitor.MonitorDevicePath, StringComparison.OrdinalIgnoreCase))
+                || (!string.IsNullOrWhiteSpace(monitor.StableId) && mapped.StableId.Equals(monitor.StableId, StringComparison.OrdinalIgnoreCase))
+                || (monitor.HasUsableSerial && mapped.HasUsableSerial && mapped.SerialKey.Equals(monitor.SerialKey, StringComparison.OrdinalIgnoreCase)))
+                return binding;
+        }
+        return null;
     }
 
     private static string RoleDisplayName(string role) => role switch
@@ -1275,15 +1467,18 @@ public sealed class AppRuntime : IDisposable
     {
         LastAppliedAt = DateTime.Now;
         if (match.Profile is null) return;
+        var matchedProfileChanged = !string.Equals(Settings.LastMatchedProfileId, match.Profile.Id, StringComparison.OrdinalIgnoreCase);
+        Settings.LastMatchedProfileId = match.Profile.Id;
         match.Profile.LastAppliedAt = DateTime.UtcNow;
         match.Profile.LastSuccessfulMatchAt = DateTime.UtcNow;
         foreach (var role in match.Profile.Roles)
         {
-            if (!match.RoleMatches.TryGetValue(role.Role, out var monitor)) continue;
+            if (!match.TryGetMonitor(role, out var monitor)) continue;
             role.LastSuccessfulMatchAt = DateTime.UtcNow;
             role.LastKnownMonitorDevicePath = monitor.MonitorDevicePath;
         }
         Store.Save("profiles.json", Profiles);
+        if (matchedProfileChanged) Store.Save("settings.json", Settings);
     }
 
     public WallpaperLibraryRefreshResult RefreshLibrary()
@@ -1503,6 +1698,7 @@ public sealed class AppRuntime : IDisposable
         Store.Save("profiles.json", Profiles);
         Store.Save("monitor-profiles.json", MonitorProfiles);
         Store.Save("window-profiles.json", WindowProfiles);
+        Store.Save("window-zones.json", WindowZoneLayouts);
         Store.Save("triggers.json", Triggers);
         Store.Save("audio-profiles.json", AudioProfiles);
         Store.Save("desktop-icons.json", DesktopIconProfiles);

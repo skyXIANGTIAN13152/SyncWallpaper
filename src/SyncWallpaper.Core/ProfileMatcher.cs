@@ -36,8 +36,11 @@ public sealed class ProfileMatcher
             return BuildAmbiguous(best, runnerUp, "多个显示器映射得分接近，需手动确认");
 
         var compatible = best.WeakOnly;
-        var confidence = best.Score <= 0 ? 0 : Math.Clamp((int)(100.0 * best.Score / Math.Max(best.Score, 1000)), 0, 100);
-        var canAutoApply = !compatible || (best.Profile.AllowCompatibleMatch && confidence >= Math.Max(0, best.Profile.MinimumConfidence));
+        var confidence = best.Confidence;
+        // Weak evidence is useful for explaining a candidate, never for
+        // guessing. Adding more displays must not turn geometry/model hints
+        // into an automatically applicable identity.
+        var canAutoApply = !compatible && confidence >= Math.Max(0, best.Profile.MinimumConfidence);
         return new MatchResult
         {
             Status = compatible ? MatchStatus.Compatible : MatchStatus.Exact,
@@ -46,6 +49,7 @@ public sealed class ProfileMatcher
             Evidence = best.Evidence,
             Score = best.Score,
             RunnerUpScore = runnerUp,
+            Confidence = confidence,
             Message = compatible ? "已通过兼容指纹匹配" : "已通过稳定身份匹配",
             IdentityStatus = best.IdentityStatus,
             CanAutoApply = canAutoApply,
@@ -61,6 +65,7 @@ public sealed class ProfileMatcher
         Evidence = e.Evidence,
         Score = e.Score,
         RunnerUpScore = runnerUp,
+        Confidence = e.Confidence,
         Message = message,
         IdentityStatus = DisplayIdentityMatchStatus.Ambiguous,
         CanAutoApply = false,
@@ -85,6 +90,7 @@ public sealed class ProfileMatcher
                     best.Evidence = evidence.ToList();
                     best.IdentityStatus = AggregateStatus(evidence.Select(x => x.IdentityStatus));
                     best.ConflictingFields = evidence.SelectMany(x => x.ConflictingFields).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                    best.Confidence = evidence.Count == 0 ? 0 : evidence.Min(x => ScoreToConfidence(x.Score));
                     tieCount = 1;
                 }
                 else if (score == best.Score) tieCount++;
@@ -95,8 +101,10 @@ public sealed class ProfileMatcher
             {
                 if (used[i]) continue;
                 var pair = Score(role, monitors[i]);
-                if (pair.Score <= 0 && !profile.AllowCompatibleMatch) continue;
-                used[i] = true; current[role.Role] = monitors[i];
+                var weak = pair.Status is DisplayIdentityMatchStatus.ProbableMatch or DisplayIdentityMatchStatus.Unknown;
+                if ((pair.Score <= 0 || weak) && !profile.AllowCompatibleMatch) continue;
+                var roleKey = string.IsNullOrWhiteSpace(role.RoleId) ? role.Role : role.RoleId;
+                used[i] = true; current[roleKey] = monitors[i];
                 var nextEvidence = evidence.Append(new MatchEvidence
                 {
                     Role = role.DisplayName,
@@ -107,7 +115,7 @@ public sealed class ProfileMatcher
                     ConflictingFields = pair.Conflicts
                 }).ToList();
                 Search(roleIndex + 1, score + pair.Score, nextEvidence);
-                current.Remove(role.Role); used[i] = false;
+                current.Remove(roleKey); used[i] = false;
             }
         }
         Search(0, 0, new());
@@ -133,6 +141,9 @@ public sealed class ProfileMatcher
         return DisplayIdentityMatchStatus.ExactMatch;
     }
 
+    private static int ScoreToConfidence(int score)
+        => score <= 0 ? 0 : Math.Clamp((int)(100.0 * score / 1000), 0, 100);
+
     private sealed class Evaluation
     {
         public Evaluation(WallpaperProfile profile) => Profile = profile;
@@ -140,6 +151,7 @@ public sealed class ProfileMatcher
         public int Score { get; set; }
         public int TopAssignments { get; set; }
         public bool WeakOnly { get; set; }
+        public int Confidence { get; set; }
         public DisplayIdentityMatchStatus IdentityStatus { get; set; } = DisplayIdentityMatchStatus.Unknown;
         public IReadOnlyList<string> ConflictingFields { get; set; } = Array.Empty<string>();
         public Dictionary<string, MonitorIdentity> Mapping { get; set; } = new(StringComparer.OrdinalIgnoreCase);

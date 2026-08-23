@@ -10,15 +10,26 @@ namespace SyncWallpaper.Windows;
 public sealed class WallpaperRenderService
 {
     private readonly DataPaths _paths;
-    public long MaxCacheBytes { get; init; } = 512L * 1024 * 1024;
+    public long MaxCacheBytes { get; private set; } = 512L * 1024 * 1024;
     public WallpaperRenderService(DataPaths paths) { _paths = paths; _paths.Ensure(); }
+
+    public void ConfigureCacheLimit(long bytes)
+    {
+        MaxCacheBytes = Math.Max(1, bytes);
+        TrimCache();
+    }
 
     public string Render(string sourcePath, string sourceHash, int width, int height, WallpaperFitMode mode, string background)
     {
         width = Math.Max(1, width); height = Math.Max(1, height);
         var key = WallpaperCacheKey.Create(sourceHash, width, height, mode, background);
         var output = Path.Combine(_paths.Rendered, key + ".png");
-        if (File.Exists(output)) return output;
+        if (File.Exists(output))
+        {
+            try { File.SetLastWriteTimeUtc(output, DateTime.UtcNow); } catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            return output;
+        }
         Directory.CreateDirectory(_paths.Rendered);
 
         var source = new BitmapImage();
@@ -54,12 +65,18 @@ public sealed class WallpaperRenderService
         var rendered = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
         rendered.Render(visual); rendered.Freeze();
         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(rendered));
-        using var file = File.Create(output); encoder.Save(file);
+        var temp = output + ".tmp";
+        using (var file = File.Create(temp))
+        {
+            encoder.Save(file);
+            file.Flush(true);
+        }
+        File.Move(temp, output, true);
         TrimCache();
         return output;
     }
 
-    private void TrimCache()
+    public void TrimCache()
     {
         try
         {

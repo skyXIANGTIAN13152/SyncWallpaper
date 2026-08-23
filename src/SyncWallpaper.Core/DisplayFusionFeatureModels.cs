@@ -60,6 +60,50 @@ public sealed class MonitorSplit
     public bool WindowManagementEnabled { get; set; } = true;
 }
 
+public enum WindowZonePreset
+{
+    TwoColumns,
+    ThreeColumns,
+    TwoRows,
+    Grid2X2,
+    PrimaryAndStack
+}
+
+/// <summary>
+/// Persisted per-monitor window zones. Coordinates are normalized to the
+/// target monitor, so a saved layout survives resolution, scale and desktop
+/// position changes without persisting Windows' temporary display number.
+/// </summary>
+public sealed class WindowZoneLayoutsDocument
+{
+    public int SchemaVersion { get; set; } = 1;
+    public bool ShiftDragEnabled { get; set; } = true;
+    public int GapPixels { get; set; } = 12;
+    public List<WindowZoneLayout> Layouts { get; set; } = new();
+}
+
+public sealed class WindowZoneLayout
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Name { get; set; } = string.Empty;
+    public bool Enabled { get; set; } = true;
+    public WindowZonePreset Preset { get; set; } = WindowZonePreset.TwoColumns;
+    public MonitorIdentity TargetMonitor { get; set; } = new();
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime ModifiedAt { get; set; } = DateTime.UtcNow;
+    public List<WindowZone> Zones { get; set; } = new();
+}
+
+public sealed class WindowZone
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Name { get; set; } = string.Empty;
+    public double Left { get; set; }
+    public double Top { get; set; }
+    public double Width { get; set; }
+    public double Height { get; set; }
+}
+
 public sealed class WindowPositionProfilesDocument
 {
     public int SchemaVersion { get; set; } = 1;

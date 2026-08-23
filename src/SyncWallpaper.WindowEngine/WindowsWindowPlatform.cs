@@ -5,7 +5,7 @@ using SyncWallpaper.Core;
 
 namespace SyncWallpaper.WindowEngine;
 
-public sealed class WindowsWindowPlatform : IWindowPlatform, IDisposable
+public sealed class WindowsWindowPlatform : IWindowPlatform, IWindowZonePlatform, IDisposable
 {
     private readonly Func<IReadOnlyList<MonitorIdentity>> _monitors;
     private readonly string _ownProcessPath = Environment.ProcessPath ?? string.Empty;
@@ -17,49 +17,27 @@ public sealed class WindowsWindowPlatform : IWindowPlatform, IDisposable
         var result = new List<WindowPositionSnapshot>();
         EnumWindows((hWnd, _) =>
         {
-            if (!IsWindowVisible(hWnd) || IsWindowCloaked(hWnd)) return true;
-            if (!GetWindowRect(hWnd, out var rect) || rect.Right - rect.Left < 80 || rect.Bottom - rect.Top < 40) return true;
-            var title = WindowText(hWnd);
-            var className = WindowClass(hWnd);
-            var path = ProcessPath(hWnd);
-            if (string.IsNullOrWhiteSpace(title) || string.Equals(path, _ownProcessPath, StringComparison.OrdinalIgnoreCase)) return true;
-            var monitor = FindMonitor(rect);
-            if (monitor is null) return true;
-            var placement = new WINDOWPLACEMENT { length = (uint)Marshal.SizeOf<WINDOWPLACEMENT>() };
-            GetWindowPlacement(hWnd, ref placement);
-            var bounds = DwmBounds(hWnd, rect);
-            result.Add(new WindowPositionSnapshot
-            {
-                Handle = hWnd,
-                Identity = new WindowIdentity
-                {
-                    ExecutablePath = path,
-                    ProcessName = Path.GetFileNameWithoutExtension(path),
-                    WindowClass = className,
-                    WindowTitle = title,
-                    AppUserModelId = ReadAppUserModelId(hWnd),
-                    IsUwp = string.IsNullOrWhiteSpace(path),
-                    IsElevated = IsElevated(hWnd)
-                },
-                MonitorDevicePath = monitor.MonitorDevicePath,
-                PhysicalBounds = new Int32Rect(bounds.Left, bounds.Top, bounds.Right - bounds.Left, bounds.Bottom - bounds.Top),
-                Dpi = (int)Math.Max(96, GetDpiForWindow(hWnd)),
-                ShowState = (int)placement.showCmd,
-                IsMaximized = IsZoomed(hWnd),
-                IsMinimized = IsIconic(hWnd)
-            });
+            var snapshot = TryCreateSnapshot(hWnd, excludeOwnProcess: true);
+            if (snapshot is not null) result.Add(snapshot);
             return true;
         }, IntPtr.Zero);
         return result;
     }
 
+    public WindowPositionSnapshot? TryGetWindow(IntPtr handle) => TryCreateSnapshot(handle, excludeOwnProcess: false);
+
+    public Int32Point? GetCursorPosition() => GetCursorPos(out var point) ? new Int32Point(point.X, point.Y) : null;
+
+    public bool IsShiftPressed() => (GetAsyncKeyState(VkShift) & 0x8000) != 0;
+
     public bool TrySetPosition(WindowPositionSnapshot window, Int32Rect physicalBounds, bool maximize)
     {
         if (!IsWindow(window.Handle)) return false;
-        var ok = SetWindowPos(window.Handle, IntPtr.Zero, physicalBounds.Left, physicalBounds.Top, physicalBounds.Width, physicalBounds.Height, SwpNoZOrder | SwpNoActivate | SwpNoOwnerZOrder);
+        if (IsZoomed(window.Handle) || IsIconic(window.Handle)) ShowWindow(window.Handle, SwRestore);
+        var outerBounds = CompensateForInvisibleFrame(window.Handle, physicalBounds);
+        var ok = SetWindowPos(window.Handle, IntPtr.Zero, outerBounds.Left, outerBounds.Top, outerBounds.Width, outerBounds.Height, SwpNoZOrder | SwpNoActivate | SwpNoOwnerZOrder);
         if (!ok) return false;
         if (maximize) ShowWindow(window.Handle, SwMaximize);
-        else if (window.IsMinimized) ShowWindow(window.Handle, SwRestore);
         return true;
     }
 
@@ -78,6 +56,56 @@ public sealed class WindowsWindowPlatform : IWindowPlatform, IDisposable
         var current = _monitors();
         return current.FirstOrDefault(m => rect.Left < m.DesktopX + m.Width && rect.Right > m.DesktopX &&
             rect.Top < m.DesktopY + m.Height && rect.Bottom > m.DesktopY);
+    }
+
+    private WindowPositionSnapshot? TryCreateSnapshot(IntPtr hWnd, bool excludeOwnProcess)
+    {
+        if (!IsWindow(hWnd) || !IsWindowVisible(hWnd) || IsWindowCloaked(hWnd)) return null;
+        if (!GetWindowRect(hWnd, out var rect) || rect.Right - rect.Left < 80 || rect.Bottom - rect.Top < 40) return null;
+        var title = WindowText(hWnd);
+        var className = WindowClass(hWnd);
+        var path = ProcessPath(hWnd);
+        if (string.IsNullOrWhiteSpace(title) || (excludeOwnProcess && string.Equals(path, _ownProcessPath, StringComparison.OrdinalIgnoreCase))) return null;
+        var bounds = DwmBounds(hWnd, rect);
+        var monitor = FindMonitor(bounds);
+        if (monitor is null) return null;
+        var placement = new WINDOWPLACEMENT { length = (uint)Marshal.SizeOf<WINDOWPLACEMENT>() };
+        GetWindowPlacement(hWnd, ref placement);
+        return new WindowPositionSnapshot
+        {
+            Handle = hWnd,
+            Identity = new WindowIdentity
+            {
+                ExecutablePath = path,
+                ProcessName = Path.GetFileNameWithoutExtension(path),
+                WindowClass = className,
+                WindowTitle = title,
+                AppUserModelId = ReadAppUserModelId(hWnd),
+                IsUwp = string.IsNullOrWhiteSpace(path),
+                IsElevated = IsElevated(hWnd)
+            },
+            MonitorDevicePath = monitor.MonitorDevicePath,
+            PhysicalBounds = new Int32Rect(bounds.Left, bounds.Top, bounds.Right - bounds.Left, bounds.Bottom - bounds.Top),
+            Dpi = (int)Math.Max(96, GetDpiForWindow(hWnd)),
+            ShowState = (int)placement.showCmd,
+            IsMaximized = IsZoomed(hWnd),
+            IsMinimized = IsIconic(hWnd)
+        };
+    }
+
+    private static Int32Rect CompensateForInvisibleFrame(IntPtr hWnd, Int32Rect desiredVisibleBounds)
+    {
+        if (!GetWindowRect(hWnd, out var outer)) return desiredVisibleBounds;
+        var visible = DwmBounds(hWnd, outer);
+        var leftInset = Math.Max(0, visible.Left - outer.Left);
+        var topInset = Math.Max(0, visible.Top - outer.Top);
+        var rightInset = Math.Max(0, outer.Right - visible.Right);
+        var bottomInset = Math.Max(0, outer.Bottom - visible.Bottom);
+        return new Int32Rect(
+            desiredVisibleBounds.Left - leftInset,
+            desiredVisibleBounds.Top - topInset,
+            desiredVisibleBounds.Width + leftInset + rightInset,
+            desiredVisibleBounds.Height + topInset + bottomInset);
     }
 
     private static RECT DwmBounds(IntPtr hWnd, RECT fallback)
@@ -126,7 +154,7 @@ public sealed class WindowsWindowPlatform : IWindowPlatform, IDisposable
     private const uint ProcessQueryLimitedInformation = 0x1000;
     private const uint TokenQuery = 0x0008;
     private const uint SwpNoZOrder = 0x0004, SwpNoActivate = 0x0010, SwpNoOwnerZOrder = 0x0200;
-    private const int SwMaximize = 3, SwRestore = 9;
+    private const int SwMaximize = 3, SwRestore = 9, VkShift = 0x10;
     private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hWnd);
@@ -141,6 +169,8 @@ public sealed class WindowsWindowPlatform : IWindowPlatform, IDisposable
     [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int command);
     [DllImport("user32.dll")] private static extern bool GetWindowPlacement(IntPtr hWnd, ref WINDOWPLACEMENT placement);
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out POINT point);
+    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int virtualKey);
     [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hWnd, int attribute, out RECT value, int size);
     [DllImport("kernel32.dll", SetLastError = true)] private static extern IntPtr OpenProcess(uint access, bool inheritHandle, uint processId);
     [DllImport("kernel32.dll", SetLastError = true)] private static extern bool QueryFullProcessImageName(IntPtr process, uint flags, StringBuilder name, ref int size);

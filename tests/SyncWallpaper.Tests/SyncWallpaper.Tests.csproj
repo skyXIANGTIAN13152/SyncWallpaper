@@ -19,6 +19,7 @@
     <ProjectReference Include="..\..\src\SyncWallpaper.Automation\SyncWallpaper.Automation.csproj" />
     <ProjectReference Include="..\..\src\SyncWallpaper.DesktopEngine\SyncWallpaper.DesktopEngine.csproj" />
     <ProjectReference Include="..\..\src\SyncWallpaper.Windows\SyncWallpaper.Windows.csproj" />
+    <ProjectReference Include="..\..\src\SyncWallpaper.TaskbarHost\SyncWallpaper.TaskbarHost.csproj" />
     <PackageReference Include="coverlet.collector" Version="6.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="MSTest.TestAdapter" Version="3.1.1" />

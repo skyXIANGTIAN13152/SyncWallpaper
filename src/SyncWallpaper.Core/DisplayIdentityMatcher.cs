@@ -91,19 +91,24 @@ public sealed class DisplayIdentityMatcher
         if (!string.IsNullOrWhiteSpace(expected.StableId)
             && !string.IsNullOrWhiteSpace(actual.StableId)
             && string.Equals(expected.StableId, actual.StableId, StringComparison.OrdinalIgnoreCase)
-            && actual.StableIdSource != MonitorIdentitySource.Ambiguous)
+            && expected.StableIdSource == actual.StableIdSource)
         {
-            var exact = actual.StableIdSource == MonitorIdentitySource.EdidSerial;
-            reasons.Add($"稳定 ID（{actual.StableIdSource}）一致");
-            return new(exact ? DisplayIdentityMatchStatus.ExactMatch : DisplayIdentityMatchStatus.StrongMatch,
-                exact ? 1200 : 1050, "StableId", reasons, conflicts);
+            var stableEvidence = actual.StableIdSource switch
+            {
+                MonitorIdentitySource.EdidSerial => new Evaluation(DisplayIdentityMatchStatus.ExactMatch, 1200, "StableId / EDID", new[] { "EDID 稳定 ID 一致" }, conflicts),
+                MonitorIdentitySource.MonitorDevicePath => new Evaluation(DisplayIdentityMatchStatus.StrongMatch, 900, "StableId / monitorDevicePath", new[] { "monitorDevicePath 稳定 ID 一致" }, conflicts),
+                MonitorIdentitySource.InstanceName => new Evaluation(DisplayIdentityMatchStatus.StrongMatch, 820, "StableId / InstanceName", new[] { "InstanceName 稳定 ID 一致" }, conflicts),
+                MonitorIdentitySource.HardwareTopology => new Evaluation(DisplayIdentityMatchStatus.StrongMatch, 760, "StableId / 硬件拓扑", new[] { "硬件拓扑稳定 ID 一致" }, conflicts),
+                MonitorIdentitySource.ContainerId when MonitorIdentityBuilder.IsUsableContainerId(actual.ContainerId)
+                    => new Evaluation(DisplayIdentityMatchStatus.ProbableMatch, 600, "StableId / Container ID", new[] { "Container ID 一致，但不能单独自动应用" }, conflicts),
+                MonitorIdentitySource.Geometry => new Evaluation(DisplayIdentityMatchStatus.ProbableMatch, 120, "StableId / 几何", new[] { "仅几何稳定 ID 一致，不能单独自动应用" }, conflicts),
+                _ => null
+            };
+            if (stableEvidence is not null) return stableEvidence;
         }
 
         if (expected.HasUsableSerial && actual.HasUsableSerial && string.Equals(expected.SerialKey, actual.SerialKey, StringComparison.OrdinalIgnoreCase))
             return new(DisplayIdentityMatchStatus.ExactMatch, 1200, "厂商 + 产品代码 + EDID 序列号", new[] { "EDID 序列号一致" }, conflicts);
-
-        if (SameNonEmpty(expected.ContainerId, actual.ContainerId))
-            return new(DisplayIdentityMatchStatus.StrongMatch, 1050, "Container ID", new[] { "Container ID 一致" }, conflicts);
 
         if (HasPermanentPath(expected) && string.Equals(expected.MonitorDevicePath, actual.MonitorDevicePath, StringComparison.OrdinalIgnoreCase))
             return new(DisplayIdentityMatchStatus.StrongMatch, 900, "monitorDevicePath", new[] { "monitorDevicePath 一致" }, conflicts);
@@ -113,6 +118,11 @@ public sealed class DisplayIdentityMatcher
 
         if (SameHardware(expected, actual))
             return new(DisplayIdentityMatchStatus.StrongMatch, 760, "Adapter LUID + Target ID + 接口", new[] { "显卡适配器、Target ID、接口类型和 connectorInstance 一致" }, conflicts);
+
+        if (MonitorIdentityBuilder.IsUsableContainerId(expected.ContainerId)
+            && MonitorIdentityBuilder.IsUsableContainerId(actual.ContainerId)
+            && SameNonEmpty(expected.ContainerId, actual.ContainerId))
+            return new(DisplayIdentityMatchStatus.ProbableMatch, 600, "Container ID", new[] { "Container ID 一致，但缺少更高等级身份依据" }, conflicts);
 
         if (SameModel(expected, actual) && SameConnection(expected, actual) && SameGeometry(expected, actual))
             return new(DisplayIdentityMatchStatus.ProbableMatch, 520, "厂商 + 产品代码 + 接口 + 几何", new[] { "型号、接口、分辨率、方向和桌面位置一致" }, conflicts);
@@ -155,7 +165,9 @@ public sealed class DisplayIdentityMatcher
     {
         var conflicts = new List<string>();
         if (expected.HasUsableSerial && actual.HasUsableSerial && !string.Equals(expected.SerialKey, actual.SerialKey, StringComparison.OrdinalIgnoreCase)) conflicts.Add("EDID 序列号");
-        if (!string.IsNullOrWhiteSpace(expected.ContainerId) && !string.IsNullOrWhiteSpace(actual.ContainerId) && !SameNonEmpty(expected.ContainerId, actual.ContainerId)) conflicts.Add("Container ID");
+        if (MonitorIdentityBuilder.IsUsableContainerId(expected.ContainerId)
+            && MonitorIdentityBuilder.IsUsableContainerId(actual.ContainerId)
+            && !SameNonEmpty(expected.ContainerId, actual.ContainerId)) conflicts.Add("Container ID");
         if (HasPermanentPath(expected) && HasPermanentPath(actual) && !string.Equals(expected.MonitorDevicePath, actual.MonitorDevicePath, StringComparison.OrdinalIgnoreCase)) conflicts.Add("monitorDevicePath");
         if (!string.IsNullOrWhiteSpace(expected.InstanceName) && !string.IsNullOrWhiteSpace(actual.InstanceName) && !SameNonEmpty(expected.InstanceName, actual.InstanceName)) conflicts.Add("InstanceName");
         if (expected.Width > 0 && actual.Width > 0 && expected.Width != actual.Width) conflicts.Add("分辨率宽度");
@@ -173,21 +185,16 @@ public static class MonitorIdentityBuilder
     {
         var list = monitors.Where(m => m is not null).ToList();
         var serialCounts = CountBy(list, x => x.HasUsableSerial ? x.SerialKey : string.Empty);
-        var containerCounts = CountBy(list, x => x.ContainerId);
         var pathCounts = CountBy(list, x => HasPermanentPath(x) ? x.MonitorDevicePath : string.Empty);
         var instanceCounts = CountBy(list, x => x.InstanceName);
         var hardwareCounts = CountBy(list, x => HasHardware(x) ? x.HardwareKey : string.Empty);
+        var containerCounts = CountBy(list, x => IsUsableContainerId(x.ContainerId) ? x.ContainerId : string.Empty);
         foreach (var monitor in list)
         {
             if (monitor.HasUsableSerial && IsUnique(serialCounts, monitor.SerialKey))
             {
                 monitor.StableId = "edid:" + Canonical(monitor.SerialKey);
                 monitor.StableIdSource = MonitorIdentitySource.EdidSerial;
-            }
-            else if (IsUniqueNonEmpty(containerCounts, monitor.ContainerId))
-            {
-                monitor.StableId = "container:" + Canonical(monitor.ContainerId);
-                monitor.StableIdSource = MonitorIdentitySource.ContainerId;
             }
             else if (HasPermanentPath(monitor) && IsUnique(pathCounts, monitor.MonitorDevicePath))
             {
@@ -203,6 +210,11 @@ public static class MonitorIdentityBuilder
             {
                 monitor.StableId = "topology:" + Canonical(monitor.HardwareKey);
                 monitor.StableIdSource = MonitorIdentitySource.HardwareTopology;
+            }
+            else if (IsUsableContainerId(monitor.ContainerId) && IsUniqueNonEmpty(containerCounts, monitor.ContainerId))
+            {
+                monitor.StableId = "container:" + Canonical(monitor.ContainerId);
+                monitor.StableIdSource = MonitorIdentitySource.ContainerId;
             }
             else if (HasGeometry(monitor) && list.Count(x => GeometryKey(x) == GeometryKey(monitor)) == 1)
             {
@@ -222,11 +234,18 @@ public static class MonitorIdentityBuilder
         => monitors.Select(key).Where(x => !string.IsNullOrWhiteSpace(x)).GroupBy(x => x, StringComparer.OrdinalIgnoreCase).ToDictionary(x => x.Key, x => x.Count(), StringComparer.OrdinalIgnoreCase);
     private static bool IsUnique(IReadOnlyDictionary<string, int> counts, string key) => !string.IsNullOrWhiteSpace(key) && counts.TryGetValue(key, out var count) && count == 1;
     private static bool IsUniqueNonEmpty(IReadOnlyDictionary<string, int> counts, string key) => IsUnique(counts, key);
-    private static bool HasHardware(MonitorIdentity x) => !string.IsNullOrWhiteSpace(x.AdapterId) && x.OutputTechnology != 0 && x.ConnectorInstance != 0;
+    private static bool HasHardware(MonitorIdentity x) => !string.IsNullOrWhiteSpace(x.AdapterId);
     private static bool HasGeometry(MonitorIdentity x) => x.Width > 0 && x.Height > 0;
     private static string GeometryKey(MonitorIdentity x) => $"{x.ModelKey}|{x.Width}x{x.Height}|{x.Rotation}|{x.DesktopX},{x.DesktopY}";
     private static string Canonical(string value) => value.Trim().ToUpperInvariant().Replace(" ", string.Empty, StringComparison.Ordinal);
     private static bool HasPermanentPath(MonitorIdentity x) => !string.IsNullOrWhiteSpace(x.MonitorDevicePath)
         && !x.MonitorDevicePath.StartsWith(@"\\.\DISPLAY", StringComparison.OrdinalIgnoreCase)
         && !x.MonitorDevicePath.StartsWith("fallback://", StringComparison.OrdinalIgnoreCase);
+
+    internal static bool IsUsableContainerId(string value)
+    {
+        if (!Guid.TryParse(value, out var id) || id == Guid.Empty) return false;
+        return id != new Guid("00000000-0000-0000-ffff-ffffffffffff")
+            && id != new Guid("ffffffff-ffff-ffff-ffff-ffffffffffff");
+    }
 }

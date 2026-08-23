@@ -27,3 +27,10 @@ Deleted/
 
 # Reference repositories are kept outside the product history.
 vendor/
+
+# Local stable runtime deployment. Source and release packaging remain tracked;
+# these folders are regenerated from the current Release build.
+App/
+Host/
+Diagnostics/
+HardwareValidation/

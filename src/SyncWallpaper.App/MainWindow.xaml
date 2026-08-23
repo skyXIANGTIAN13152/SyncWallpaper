@@ -62,9 +62,9 @@
     <Grid>
         <!-- Transparent corners and the small gaps between cards are intentional:
              they create the requested cut-out/glass effect instead of a solid app rectangle. -->
-        <Ellipse Width="620" Height="620" HorizontalAlignment="Right" VerticalAlignment="Top"
+        <Ellipse x:Name="NebulaGlowTop" Width="620" Height="620" HorizontalAlignment="Right" VerticalAlignment="Top"
                  Margin="0,-240,-180,0" Fill="{StaticResource NebulaGlow}" Opacity="0.55" IsHitTestVisible="False"/>
-        <Ellipse Width="420" Height="420" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+        <Ellipse x:Name="NebulaGlowBottom" Width="420" Height="420" HorizontalAlignment="Left" VerticalAlignment="Bottom"
                  Margin="-210,0,0,-180" Fill="{StaticResource NebulaGlow}" Opacity="0.3" IsHitTestVisible="False"/>
         <Border Margin="10" Background="{StaticResource WindowSurface}" BorderBrush="{StaticResource GlassBorder}"
                 BorderThickness="1" CornerRadius="24" Padding="1">
@@ -269,14 +269,16 @@
                             <StackPanel>
                                 <TextBlock Text="壁纸组合档案" FontSize="17"/>
                                 <TextBlock Text="每套档案独立保存显示器身份、逻辑角色和壁纸。插拔后会按现有显示器组合自动匹配；同一组合也可以保存多套壁纸方案。" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,8,0,14"/>
-                                <StackPanel Orientation="Horizontal">
+                                <WrapPanel>
                                     <TextBox x:Name="WallpaperProfileNameText" Text="" Width="230" Height="34" VerticalContentAlignment="Center" ToolTip="输入这套显示器组合的名称"/>
+                                    <Button Content="新建空白组合" Click="CreateBlankWallpaperProfile_Click" Margin="10,0,0,0"/>
                                     <Button Content="保存当前壁纸组合" Click="SaveWallpaperProfile_Click" Margin="10,0,0,0"/>
+                                    <Button Content="编辑选中组合" Click="EditWallpaperProfile_Click" Margin="10,0,0,0"/>
                                     <Button Content="应用选中组合" Click="ApplyWallpaperProfile_Click" Margin="10,0,0,0"/>
                                     <Button Content="重命名选中组合" Click="RenameWallpaperProfile_Click" Margin="10,0,0,0"/>
                                     <Button Content="删除选中组合" Click="DeleteWallpaperProfile_Click" Margin="10,0,0,0"/>
-                                </StackPanel>
-                                <ListBox x:Name="WallpaperProfilesList" Margin="0,14,0,0" MinHeight="120" MaxHeight="310" Background="#3814263D" BorderBrush="{StaticResource Border}" Foreground="{StaticResource TextPrimary}">
+                                </WrapPanel>
+                                <ListBox x:Name="WallpaperProfilesList" Margin="0,14,0,0" MinHeight="120" MaxHeight="310" Background="#3814263D" BorderBrush="{StaticResource Border}" Foreground="{StaticResource TextPrimary}" MouseDoubleClick="WallpaperProfilesList_MouseDoubleClick">
                                     <ListBox.ItemContainerStyle>
                                         <Style TargetType="ListBoxItem">
                                             <Setter Property="Padding" Value="0"/>
@@ -340,9 +342,53 @@
                         </Border>
                         <Border Style="{StaticResource Card}">
                             <StackPanel>
-                                <TextBlock Text="屏幕分割 / 任务栏 / 屏幕行为" FontSize="17"/>
-                                <TextBlock Text="每个物理显示器可定义虚拟分区、任务栏、窗口管理、淡化和本地屏保策略。" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,10,0,14"/>
-                                <WrapPanel><Button Content="显示多显示器任务栏" Click="ShowTaskbar_Click"/><Button Content="启动本地屏保" Click="StartSaver_Click"/><Button Content="清除屏幕淡化" Click="ClearFade_Click"/></WrapPanel>
+                                <TextBlock Text="窗口区域（Shift 拖动吸附）" FontSize="17"/>
+                                <TextBlock Text="区域按稳定显示器身份保存，不使用 Windows 临时编号。按住 Shift 拖动普通窗口，松开鼠标后会吸附到指针所在区域；高权限窗口和身份歧义显示器不会自动移动。" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,10,0,14"/>
+                                <WrapPanel>
+                                    <ComboBox x:Name="ZoneMonitorCombo" Width="250" DisplayMemberPath="Label" SelectedValuePath="StableId" ToolTip="选择要配置区域的显示器"/>
+                                    <ComboBox x:Name="ZonePresetCombo" Width="150" SelectedIndex="0" ToolTip="区域预设">
+                                        <ComboBoxItem Content="左右二等分" Tag="TwoColumns"/>
+                                        <ComboBoxItem Content="横向三等分" Tag="ThreeColumns"/>
+                                        <ComboBoxItem Content="上下二等分" Tag="TwoRows"/>
+                                        <ComboBoxItem Content="四宫格" Tag="Grid2X2"/>
+                                        <ComboBoxItem Content="主区 + 双副区" Tag="PrimaryAndStack"/>
+                                    </ComboBox>
+                                    <TextBlock Text="间距" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" Margin="8,0,4,0"/>
+                                    <TextBox x:Name="ZoneGapText" Width="54" Text="12" VerticalContentAlignment="Center" ToolTip="区域间距，0 到 96 像素"/>
+                                    <Button Content="保存区域布局" Click="ConfigureZones_Click"/>
+                                    <Button Content="删除所选布局" Click="DeleteZones_Click"/>
+                                </WrapPanel>
+                                <WrapPanel Margin="0,10,0,0">
+                                    <CheckBox x:Name="ZoneShiftCheck" Content="启用 Shift 拖动吸附" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center" Margin="0,0,16,0" Click="ZoneShiftCheck_Click"/>
+                                    <Button Content="启用 Window Engine" Click="EnableWindowZones_Click"/>
+                                </WrapPanel>
+                                <ItemsControl x:Name="ZoneLayoutsItems" Margin="0,12,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,0,8">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold"/>
+                                                    <TextBlock Text="{Binding Details}" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock x:Name="WindowZoneStatusText" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="任务栏与屏幕行为" FontSize="17"/>
+                                <TextBlock Text="副屏任务栏支持应用分组、窗口切换/关闭、悬停实时预览、固定应用、时钟、自动隐藏和 Windows AppBar 工作区预留；独立宿主仅在启用时运行。" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,10,0,14"/>
+                                <WrapPanel><Button x:Name="TaskbarToggleButton" Content="启用副屏任务栏" Click="ShowTaskbar_Click"/><Button Content="启动本地屏保" Click="StartSaver_Click"/><Button Content="清除屏幕淡化" Click="ClearFade_Click"/></WrapPanel>
+                                <WrapPanel Margin="0,10,0,0">
+                                    <CheckBox x:Name="TaskbarAutoHideCheck" Content="自动隐藏，移动到副屏底边唤出" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center" Margin="0,0,18,0" Click="TaskbarAutoHide_Click"/>
+                                    <CheckBox x:Name="TaskbarReserveWorkAreaCheck" Content="预留工作区，避免遮挡最大化窗口" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center" Margin="0,0,18,0"/>
+                                    <Button Content="应用任务栏行为" Click="ApplyTaskbarBehavior_Click"/>
+                                </WrapPanel>
+                                <TextBlock Text="自动隐藏采用独立边缘唤出，不占用 Windows 的自动隐藏 AppBar 槽位；启用后会自动关闭工作区预留。" Foreground="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                <TextBlock x:Name="TaskbarHostStatusText" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,10,0,0"/>
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -407,7 +453,7 @@
                         <Border Style="{StaticResource Card}"><StackPanel>
                             <CheckBox x:Name="AutoMatchCheck" Content="自动匹配显示器组合" Foreground="{StaticResource TextPrimary}" IsChecked="True" Margin="0,0,0,14" Click="AutoMatch_Click"/>
                             <CheckBox x:Name="StartupCheck" Content="随 Windows 启动（仅屏序自身）" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,14" Click="Startup_Click"/>
-                            <CheckBox Content="低性能模式 / 减少动态效果" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,14"/>
+                            <CheckBox x:Name="LowPerformanceCheck" Content="低性能模式（关闭背景光效，并限制渲染缓存）" Foreground="{StaticResource TextPrimary}" Margin="0,0,0,14" Click="LowPerformance_Click"/>
                         </StackPanel></Border>
                         <Border Style="{StaticResource Card}"><StackPanel>
                             <TextBlock Text="更新检查" FontSize="17"/>

@@ -46,17 +46,17 @@ public class DisplayIdentityMatcherTests
     }
 
     [TestMethod]
-    public void ContainerIdSurvivesPathAndInterfaceChange()
+    public void ContainerIdAloneIsOnlyProbableAndCannotAutoApply()
     {
         var expected = Monitor("DELL", "U2720", "", "PATH-A", 0);
-        expected.ContainerId = "{CONTAINER-1}";
+        expected.ContainerId = "{11111111-2222-3333-4444-555555555555}";
         var actual = Monitor("DELL", "U2720", "", "PATH-B", 0);
-        actual.ContainerId = "{CONTAINER-1}";
+        actual.ContainerId = "{11111111-2222-3333-4444-555555555555}";
         actual.OutputTechnology = expected.OutputTechnology + 1;
         var result = new DisplayIdentityMatcher().Match(expected, new[] { actual });
 
-        Assert.AreEqual(DisplayIdentityMatchStatus.StrongMatch, result.Status);
-        Assert.IsTrue(result.CanAutoApply);
+        Assert.AreEqual(DisplayIdentityMatchStatus.ProbableMatch, result.Status);
+        Assert.IsFalse(result.CanAutoApply);
         StringAssert.Contains(result.Basis, "Container");
     }
 
@@ -94,6 +94,56 @@ public class DisplayIdentityMatcherTests
 
         Assert.AreEqual(MonitorIdentitySource.EdidSerial, monitor.StableIdSource);
         StringAssert.StartsWith(monitor.StableId, "edid:");
+    }
+
+    [TestMethod]
+    public void StableIdBuilderUsesPathBeforeContainerId()
+    {
+        var monitor = Monitor("AOC", "B426", "0", "PATH-A", 0);
+        monitor.ContainerId = "{11111111-2222-3333-4444-555555555555}";
+
+        MonitorIdentityBuilder.AssignStableIds(new[] { monitor });
+
+        Assert.AreEqual(MonitorIdentitySource.MonitorDevicePath, monitor.StableIdSource);
+        StringAssert.StartsWith(monitor.StableId, "path:");
+    }
+
+    [TestMethod]
+    public void SentinelContainerIdIsRejected()
+    {
+        var monitor = Monitor("TMA", "0803", "0", string.Empty, 0, true);
+        monitor.AdapterId = string.Empty;
+        monitor.ContainerId = "{00000000-0000-0000-ffff-ffffffffffff}";
+
+        MonitorIdentityBuilder.AssignStableIds(new[] { monitor });
+
+        Assert.AreNotEqual(MonitorIdentitySource.ContainerId, monitor.StableIdSource);
+    }
+
+    [TestMethod]
+    public void GeometryStableIdRemainsProbableAndCannotAutoApply()
+    {
+        var expected = Monitor("", "", "0", string.Empty, 0);
+        expected.AdapterId = string.Empty;
+        var actual = expected.Clone();
+        MonitorIdentityBuilder.AssignStableIds(new[] { expected });
+        MonitorIdentityBuilder.AssignStableIds(new[] { actual });
+
+        var result = new DisplayIdentityMatcher().Match(expected, actual);
+
+        Assert.AreEqual(DisplayIdentityMatchStatus.ProbableMatch, result.Status);
+        Assert.IsFalse(result.CanAutoApply);
+    }
+
+    [TestMethod]
+    public void ConnectorInstanceZeroCanStillFormHardwareIdentity()
+    {
+        var monitor = Monitor("AOC", "B426", "0", string.Empty, 0);
+        monitor.ConnectorInstance = 0;
+
+        MonitorIdentityBuilder.AssignStableIds(new[] { monitor });
+
+        Assert.AreEqual(MonitorIdentitySource.HardwareTopology, monitor.StableIdSource);
     }
 
     private static MonitorIdentity Monitor(string manufacturer, string product, string serial, string path, int x, bool internalDisplay = false) => new()

@@ -23,13 +23,19 @@ public partial class App : System.Windows.Application
         _background = e.Args.Any(a => a.Equals("--background", StringComparison.OrdinalIgnoreCase));
         _validationMode = e.Args.Any(a => a.Equals("--validation", StringComparison.OrdinalIgnoreCase));
         _singleInstance = new SingleInstanceService();
-        if (!_singleInstance.TryAcquire()) { Shutdown(); return; }
+        if (!_singleInstance.TryAcquire())
+        {
+            _singleInstance.SignalExistingInstance();
+            Shutdown();
+            return;
+        }
         _runtime = new AppRuntime();
         _runtime.StateChanged += (_, _) => Dispatcher.InvokeAsync(UpdateTray);
         _trayState = _runtime.TrayVisualState;
         _tray = new NotifyIcon { Icon = TrayIconRenderer.Create(_trayState.Value), Visible = true, Text = "屏序 SyncWallpaper" };
         _tray.DoubleClick += (_, _) => ShowMainWindow();
         _tray.ContextMenuStrip = BuildTrayMenu();
+        _singleInstance.StartActivationListener(() => Dispatcher.InvokeAsync(ShowMainWindow));
         _runtime.Start(_validationMode);
         if (!_background) ShowMainWindow();
     }
@@ -62,7 +68,7 @@ public partial class App : System.Windows.Application
         });
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("打开屏序", null, (_, _) => ShowMainWindow());
-        menu.Items.Add("启用独立多显示器任务栏宿主", null, async (_, _) => { if (_runtime is not null) await _runtime.SetModuleEnabledAsync(SyncWallpaper.Core.SyncWallpaperModule.TaskbarHost, true); });
+        menu.Items.Add("切换独立副屏任务栏", null, async (_, _) => { if (_runtime is not null) await _runtime.SetModuleEnabledAsync(SyncWallpaper.Core.SyncWallpaperModule.TaskbarHost, !_runtime.IsTaskbarHostRunning); });
         menu.Items.Add("启用独立屏保宿主", null, async (_, _) => { if (_runtime is not null) await _runtime.SetModuleEnabledAsync(SyncWallpaper.Core.SyncWallpaperModule.ScreenSaverHost, true); });
         menu.Items.Add("启用自动匹配", null, (_, _) => { if (_runtime is not null) _runtime.Settings.AutoMatchEnabled = true; });
         menu.Items.Add("暂停自动切换", null, (_, _) => { if (_runtime is not null) _runtime.Settings.AutoMatchEnabled = false; });

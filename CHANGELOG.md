@@ -11,7 +11,16 @@
 
 ## Unreleased
 
-- Future changes will be listed here before the next tagged release.
+- Fixed startup wallpaper application when a valid matched profile retained a stale `AutoApply=false` value after being completed from a blank profile.
+- Complete wallpaper profiles now derive automatic-apply eligibility from their monitor and wallpaper bindings; schema v4 repairs existing profiles while blank or incomplete profiles remain non-applicable.
+- Synchronized the displayed startup setting with the actual current-user Windows startup registration.
+- Added editable blank wallpaper profiles and completed-profile validation without changing the global automatic-matching safety switch.
+- Added per-monitor window-zone layouts with Shift-drag snapping and mixed-DPI-aware placement safeguards.
+- Added TaskbarHost v2 application grouping, grouped window actions, standard close requests, DWM live hover thumbnails, persistent local app pins and a secondary-display clock.
+- Extended TaskbarHost IPC/status diagnostics with per-bar task, group and pinned counts while preserving the default lightweight no-process mode.
+- Added TaskbarHost v3 bottom-edge auto-hide with delayed reveal, live hidden-state diagnostics and complete timer/process cleanup.
+- Added documented AppBar work-area negotiation for one secondary monitor and a tested multi-secondary safety fallback that prevents Windows from stacking multiple work-area insets on one display.
+- Audited notification-area mirroring and explicitly rejected Explorer injection or undocumented toolbar enumeration; full third-party tray mirroring remains unimplemented.
 
 ## 1.0.0-rc.1 — 2026-08-05
 

@@ -5,8 +5,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <UseWPF>true</UseWPF>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\SyncWallpaper.Core\SyncWallpaper.Core.csproj" />
+    <ProjectReference Include="..\SyncWallpaper.TaskbarHost\SyncWallpaper.TaskbarHost.csproj" />
   </ItemGroup>
 </Project>

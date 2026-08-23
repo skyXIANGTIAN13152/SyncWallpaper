@@ -22,12 +22,20 @@ public sealed class DataPaths
 public sealed class ConfigurationStore
 {
     private const long MaxConfigurationBytes = 10 * 1024 * 1024;
-    private const int MaxRecoveryVersions = 5;
+    private const int MaximumSupportedRecoveryVersions = 5;
+    private readonly int _recoveryVersions;
     private readonly JsonSerializerOptions _options = new(JsonSerializerDefaults.Web) { WriteIndented = true, MaxDepth = 32, Converters = { new JsonStringEnumConverter() } };
     private readonly object _gate = new();
     private readonly IFaultInjector _faultInjector;
     public DataPaths Paths { get; }
-    public ConfigurationStore(DataPaths? paths = null, IFaultInjector? faultInjector = null) { Paths = paths ?? new DataPaths(); Paths.Ensure(); _faultInjector = faultInjector ?? NoFaultInjector.Instance; }
+    public ConfigurationStore(DataPaths? paths = null, IFaultInjector? faultInjector = null, int recoveryVersions = 0)
+    {
+        if (recoveryVersions < 0 || recoveryVersions > MaximumSupportedRecoveryVersions) throw new ArgumentOutOfRangeException(nameof(recoveryVersions));
+        Paths = paths ?? new DataPaths();
+        Paths.Ensure();
+        _faultInjector = faultInjector ?? NoFaultInjector.Instance;
+        _recoveryVersions = recoveryVersions;
+    }
 
     public T Load<T>(string fileName, T fallback, Func<T, bool>? validator = null)
     {
@@ -65,8 +73,8 @@ public sealed class ConfigurationStore
             if (Encoding.UTF8.GetByteCount(json) > MaxConfigurationBytes) throw new InvalidDataException("配置文件超过 10 MiB 安全上限。");
             File.WriteAllText(temp, json);
             using (var stream = new FileStream(temp, FileMode.Open, FileAccess.Read, FileShare.Read)) stream.Flush(true);
-            RotateBackups(fileName, path, backup);
-            File.Move(temp, path, true);
+            if (_recoveryVersions > 0) RotateBackups(fileName, path, backup);
+            ReplaceAtomically(temp, path);
         }
     }
 
@@ -87,7 +95,7 @@ public sealed class ConfigurationStore
     public void Restore(string fileName, int version)
     {
         ValidateFileName(fileName);
-        if (version < 0 || version > MaxRecoveryVersions) throw new ArgumentOutOfRangeException(nameof(version));
+        if (version < 0 || version > _recoveryVersions) throw new ArgumentOutOfRangeException(nameof(version));
         var source = version == 0 ? Path.Combine(Paths.Config, fileName) : Path.Combine(Paths.Backups, fileName + ".bak" + (version == 1 ? string.Empty : "." + (version - 1)));
         if (!File.Exists(source)) throw new FileNotFoundException("找不到指定的配置恢复点。", source);
         var target = Path.Combine(Paths.Config, fileName);
@@ -104,14 +112,15 @@ public sealed class ConfigurationStore
     private IEnumerable<string> RecoveryCandidates(string fileName, string primary, string backup)
     {
         yield return primary;
+        if (_recoveryVersions == 0) yield break;
         yield return backup;
-        for (var i = 1; i < MaxRecoveryVersions; i++) yield return Path.Combine(Paths.Backups, fileName + ".bak." + i);
+        for (var i = 1; i < _recoveryVersions; i++) yield return Path.Combine(Paths.Backups, fileName + ".bak." + i);
     }
 
     private void RotateBackups(string fileName, string path, string backup)
     {
         if (!File.Exists(path)) return;
-        for (var i = MaxRecoveryVersions - 1; i >= 1; i--)
+        for (var i = _recoveryVersions - 1; i >= 1; i--)
         {
             var from = Path.Combine(Paths.Backups, fileName + ".bak." + (i - 1 == 0 ? string.Empty : (i - 1).ToString()));
             var to = Path.Combine(Paths.Backups, fileName + ".bak." + i);
@@ -119,6 +128,19 @@ public sealed class ConfigurationStore
             if (File.Exists(from)) File.Copy(from, to, true);
         }
         File.Copy(path, backup, true);
+    }
+
+    private static void ReplaceAtomically(string temp, string path)
+    {
+        if (!File.Exists(path))
+        {
+            File.Move(temp, path);
+            return;
+        }
+
+        try { File.Replace(temp, path, null, true); }
+        catch (PlatformNotSupportedException) { File.Move(temp, path, true); }
+        catch (IOException) { File.Move(temp, path, true); }
     }
 
     private static int ExtractVersion(string path, string fileName)

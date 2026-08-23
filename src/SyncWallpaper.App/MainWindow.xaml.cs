@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using SyncWallpaper.Core;
 using SyncWallpaper.Update.Core;
@@ -23,6 +24,9 @@ public partial class MainWindow : Window
     private readonly DisplayIdentificationOverlayService _identityOverlay = new();
     private readonly DisplayRoleAssignmentService _roleAssignment = new();
     private bool _refreshing;
+    private volatile bool _refreshDirty = true;
+    private volatile bool _windowVisible;
+    private int _refreshRequestQueued;
     private string _libraryStatusText = "档案库已加载；如在资源管理器中增删文件，请点击刷新。";
 
     public MainWindow(AppRuntime runtime)
@@ -32,15 +36,38 @@ public partial class MainWindow : Window
         AudioProfilesItems.ItemsSource = Array.Empty<AudioProfileItem>();
         DesktopProfilesItems.ItemsSource = Array.Empty<DesktopProfileItem>();
         WallpaperProfilesList.ItemsSource = Array.Empty<WallpaperProfileItem>();
-        _runtime.StateChanged += Runtime_StateChanged; Loaded += (_, _) => Refresh();
+        _runtime.StateChanged += Runtime_StateChanged;
+        Loaded += (_, _) => { _windowVisible = true; Refresh(); };
+        IsVisibleChanged += (_, _) =>
+        {
+            _windowVisible = IsVisible;
+            if (_windowVisible && _refreshDirty) QueueRefresh();
+        };
     }
 
-    private void Runtime_StateChanged(object? sender, EventArgs e) => Dispatcher.InvokeAsync(Refresh);
+    private void Runtime_StateChanged(object? sender, EventArgs e)
+    {
+        _refreshDirty = true;
+        QueueRefresh();
+    }
+
+    private void QueueRefresh()
+    {
+        if (!_windowVisible || Interlocked.Exchange(ref _refreshRequestQueued, 1) != 0) return;
+        _ = Dispatcher.InvokeAsync(() =>
+        {
+            Interlocked.Exchange(ref _refreshRequestQueued, 0);
+            if (!_windowVisible || !_refreshDirty) return;
+            Refresh();
+        }, DispatcherPriority.Background);
+    }
+
     private void Refresh()
     {
+        _refreshDirty = false;
         var selectedProfileId = (WallpaperProfilesList.SelectedItem as WallpaperProfileItem)?.Id
             ?? WallpaperProfilesList.SelectedValue?.ToString()
-            ?? _runtime.Settings.ActiveProfileId;
+            ?? _runtime.Settings.EditingProfileId;
         StatusBadge.Text = _runtime.StatusText; OverviewStatus.Text = _runtime.StatusText; LastMessage.Text = _runtime.LastMessage;
         WallpaperTransactionText.Text = $"{_runtime.LastWallpaperTransaction.State} · {_runtime.LastWallpaperTransaction.DurationMilliseconds:0} ms · {_runtime.LastWallpaperTransaction.Message}";
         MonitorCount.Text = _runtime.Monitors.Count.ToString(); ProfileName.Text = _runtime.LastMatch?.Profile?.Name ?? "未选择";
@@ -49,7 +76,7 @@ public partial class MainWindow : Window
         foreach (var m in _runtime.Monitors)
         {
             var role = RoleForMonitor(m);
-            _displayItems.Add(new DisplayItem(role, m.DisplayLabel, $"{m.Width} × {m.Height} · {FormatOrientation(m)}", WallpaperForRole(role), $"{m.ManufacturerName} / {m.ProductCodeId}"));
+            _displayItems.Add(new DisplayItem(role, m.DisplayLabel, $"{m.Width} × {m.Height} · {FormatOrientation(m)}", WallpaperForMonitor(m), $"{m.ManufacturerName} / {m.ProductCodeId}"));
         }
         DisplayDetails.ItemsSource = _runtime.Monitors.Select(m =>
         {
@@ -58,7 +85,7 @@ public partial class MainWindow : Window
                 RoleForMonitor(m),
                 string.IsNullOrWhiteSpace(m.WindowsDisplayName) ? m.DisplayLabel : $"{m.DisplayLabel} · {m.WindowsDisplayName}",
                 $"{m.Width} × {m.Height} · 原生 {m.NativeWidth} × {m.NativeHeight} · {m.RefreshRateNumerator}/{Math.Max(1, m.RefreshRateDenominator)} Hz · {FormatOrientation(m)} · 桌面 {m.DesktopX},{m.DesktopY}",
-                WallpaperForRole(RoleForMonitor(m)),
+                WallpaperForMonitor(m),
                 $"身份 {safe.StableIdSource}: {safe.StableId} · Container {safe.ContainerId} · 路径 {safe.MonitorDevicePath} · 序列号 {safe.Serial} · Adapter {safe.AdapterId} / Target {safe.TargetId} · 接口 {safe.OutputTechnology}/{safe.ConnectorInstance} · {safe.ConnectionState}");
         });
         EvidenceText.Text = _runtime.LastMatch is null ? "尚未检测" : string.Join(Environment.NewLine, _runtime.LastMatch.Evidence.Select(x => $"· {x.Role} ← {x.Monitor}：{x.Reason}（{x.Score}）")) + Environment.NewLine + _runtime.LastMatch.Message;
@@ -86,6 +113,36 @@ public partial class MainWindow : Window
         AudioStatusText.Text = _runtime.LastAudioResult?.Message ?? "尚未应用音频配置。";
         WindowStatusText.Text = _runtime.LastWindowRestore is null ? "尚未恢复窗口布局。" :
             $"已匹配 {_runtime.LastWindowRestore.Matched}，已应用 {_runtime.LastWindowRestore.Applied}，跳过 {_runtime.LastWindowRestore.Skipped}。";
+        var selectedZoneMonitor = ZoneMonitorCombo.SelectedValue?.ToString();
+        var zoneMonitors = _runtime.Monitors
+            .Where(HasStableZoneIdentity)
+            .Select(x => new ZoneMonitorItem(x.StableId, x.DisplayLabel, $"{x.Width} × {x.Height} · {FormatOrientation(x)} · {x.StableIdSource}"))
+            .ToList();
+        ZoneMonitorCombo.ItemsSource = zoneMonitors;
+        ZoneMonitorCombo.SelectedValue = zoneMonitors.Any(x => x.StableId.Equals(selectedZoneMonitor, StringComparison.OrdinalIgnoreCase))
+            ? selectedZoneMonitor
+            : zoneMonitors.FirstOrDefault()?.StableId;
+        if (!ZoneGapText.IsKeyboardFocusWithin) ZoneGapText.Text = _runtime.WindowZoneLayouts.GapPixels.ToString();
+        ZoneShiftCheck.IsChecked = _runtime.WindowZoneLayouts.ShiftDragEnabled;
+        ZoneLayoutsItems.ItemsSource = _runtime.WindowZoneLayouts.Layouts
+            .OrderBy(x => x.TargetMonitor.DisplayLabel, StringComparer.CurrentCultureIgnoreCase)
+            .Select(x => new ZoneLayoutItem(
+                x.Name,
+                $"{x.TargetMonitor.DisplayLabel} · {x.Zones.Count} 个区域 · {x.TargetMonitor.StableIdSource} · 修改于 {x.ModifiedAt.ToLocalTime():MM-dd HH:mm}"))
+            .ToList();
+        var zoneRuntime = _runtime.IsWindowZoneEngineRunning ? "Window Engine 正在运行" : "Window Engine 未启用，已保存布局暂不响应拖动";
+        WindowZoneStatusText.Text = _runtime.LastWindowZoneSnap is { } snap
+            ? $"{zoneRuntime}。最近结果：{snap.Message}"
+            : $"{zoneRuntime}。已保存 {_runtime.WindowZoneLayouts.Layouts.Count} 个显示器区域布局。";
+        var taskbarStatus = _runtime.Modules.Snapshot(_runtime.Settings.Modules)
+            .FirstOrDefault(x => x.Id == SyncWallpaperModule.TaskbarHost);
+        TaskbarToggleButton.Content = _runtime.IsTaskbarHostRunning ? "关闭副屏任务栏" : "启用副屏任务栏";
+        TaskbarAutoHideCheck.IsChecked = _runtime.TaskbarPreferences.AutoHide;
+        TaskbarReserveWorkAreaCheck.IsChecked = _runtime.TaskbarPreferences.ReserveWorkArea;
+        TaskbarReserveWorkAreaCheck.IsEnabled = !_runtime.TaskbarPreferences.AutoHide;
+        TaskbarHostStatusText.Text = taskbarStatus is null
+            ? "副屏任务栏模块未注册。"
+            : $"{taskbarStatus.State} · {taskbarStatus.HookStatus}{(string.IsNullOrWhiteSpace(taskbarStatus.LastError) ? string.Empty : " · 最近错误：" + taskbarStatus.LastError)}";
         AutomationStatusText.Text = _runtime.LastAutomationResults.Count == 0 ? "尚未执行自动化。" :
             $"最近执行 {_runtime.LastAutomationResults.Count} 步，成功 {_runtime.LastAutomationResults.Count(x => x.Success)} 步。";
         DesktopProfilesItems.ItemsSource = _runtime.DesktopIconProfiles.Profiles.Select(x => new DesktopProfileItem(x.Name, x.Positions.Count)).ToList();
@@ -93,6 +150,8 @@ public partial class MainWindow : Window
             $"已应用 {_runtime.LastDesktopRestore.Applied}，跳过 {_runtime.LastDesktopRestore.Skipped}。";
         LogsList.ItemsSource = _runtime.RecentLogs.Select(x => $"{x.Timestamp:HH:mm:ss}  {x.Type}  {x.Message}").ToList();
         AutoMatchCheck.IsChecked = _runtime.Settings.AutoMatchEnabled; StartupCheck.IsChecked = _runtime.Settings.StartWithWindows; DataPathText.Text = _runtime.Paths.Root;
+        LowPerformanceCheck.IsChecked = _runtime.Settings.LowPerformanceMode;
+        NebulaGlowTop.Visibility = NebulaGlowBottom.Visibility = _runtime.Settings.LowPerformanceMode ? Visibility.Collapsed : Visibility.Visible;
         _refreshing = true;
         CurrentVersionText.Text = _runtime.CurrentVersion;
         UpdateChannelCombo.SelectedIndex = string.Equals(_runtime.Settings.UpdateChannel, nameof(UpdateChannel.Beta), StringComparison.OrdinalIgnoreCase) ? 1 : 0;
@@ -217,6 +276,7 @@ public partial class MainWindow : Window
         Refresh();
     }
     private void RefreshModules_Click(object sender, RoutedEventArgs e) => Refresh();
+    private void LowPerformance_Click(object sender, RoutedEventArgs e) => _runtime.SetLowPerformanceMode(LowPerformanceCheck.IsChecked == true);
     private void SaveWallpaperProfile_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -230,6 +290,47 @@ public partial class MainWindow : Window
         {
             System.Windows.MessageBox.Show(ex.Message, "保存壁纸组合", MessageBoxButton.OK, MessageBoxImage.Information);
         }
+    }
+
+    private void CreateBlankWallpaperProfile_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var profile = _runtime.CreateBlankWallpaperProfile(WallpaperProfileNameText.Text);
+            WallpaperProfileNameText.Text = string.Empty;
+            Refresh();
+            WallpaperProfilesList.SelectedValue = profile.Id;
+            OpenWallpaperProfileEditor(profile.Id);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(ex.Message, "新建空白组合", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    private void EditWallpaperProfile_Click(object sender, RoutedEventArgs e)
+    {
+        if (WallpaperProfilesList.SelectedItem is not WallpaperProfileItem item)
+        {
+            System.Windows.MessageBox.Show("请先选择要编辑的壁纸组合。", "壁纸组合", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        OpenWallpaperProfileEditor(item.Id);
+    }
+
+    private void WallpaperProfilesList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (WallpaperProfilesList.SelectedItem is WallpaperProfileItem item) OpenWallpaperProfileEditor(item.Id);
+    }
+
+    private void OpenWallpaperProfileEditor(string profileId)
+    {
+        var profile = _runtime.FindWallpaperProfile(profileId);
+        if (profile is null) return;
+        var dialog = new WallpaperProfileEditorWindow(_runtime, profile) { Owner = this };
+        dialog.ShowDialog();
+        Refresh();
+        WallpaperProfilesList.SelectedValue = profileId;
     }
 
     private async void ApplyWallpaperProfile_Click(object sender, RoutedEventArgs e)
@@ -298,6 +399,48 @@ public partial class MainWindow : Window
     private void OpenCache_Click(object sender, RoutedEventArgs e) => _runtime.OpenFolder(_runtime.Paths.Cache);
     private void CaptureWindows_Click(object sender, RoutedEventArgs e) { try { _runtime.CaptureWindowProfile("布局 " + DateTime.Now.ToString("yyyy-MM-dd HH-mm")); Refresh(); } catch (Exception ex) { System.Windows.MessageBox.Show(ex.Message, "窗口模块"); } }
     private void ApplyWindows_Click(object sender, RoutedEventArgs e) { var profile = _runtime.WindowProfiles.Profiles.LastOrDefault(); if (profile is not null) System.Windows.MessageBox.Show($"已恢复 {_runtime.ApplyWindowProfile(profile.Id)} 个窗口。", "屏序"); }
+    private void ConfigureZones_Click(object sender, RoutedEventArgs e)
+    {
+        if (ZoneMonitorCombo.SelectedItem is not ZoneMonitorItem monitor)
+        {
+            System.Windows.MessageBox.Show("当前没有具备稳定身份的活动显示器。请先重新检测或确认显示器身份。", "窗口区域", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (ZonePresetCombo.SelectedItem is not ComboBoxItem presetItem
+            || !Enum.TryParse<WindowZonePreset>(presetItem.Tag?.ToString(), out var preset))
+            return;
+        if (!int.TryParse(ZoneGapText.Text, out var gap) || gap is < 0 or > 96)
+        {
+            System.Windows.MessageBox.Show("区域间距请输入 0 到 96 之间的整数。", "窗口区域", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        try
+        {
+            _runtime.ConfigureWindowZones(monitor.StableId, preset, gap);
+            Refresh();
+            ZoneMonitorCombo.SelectedValue = monitor.StableId;
+        }
+        catch (Exception ex) { System.Windows.MessageBox.Show(ex.Message, "窗口区域", MessageBoxButton.OK, MessageBoxImage.Warning); }
+    }
+    private void DeleteZones_Click(object sender, RoutedEventArgs e)
+    {
+        if (ZoneMonitorCombo.SelectedItem is not ZoneMonitorItem monitor) return;
+        if (System.Windows.MessageBox.Show($"删除“{monitor.Label}”的窗口区域布局？", "删除窗口区域", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+        _runtime.DeleteWindowZones(monitor.StableId);
+        Refresh();
+    }
+    private void ZoneShiftCheck_Click(object sender, RoutedEventArgs e)
+    {
+        if (_refreshing) return;
+        _runtime.SetShiftDragZonesEnabled(ZoneShiftCheck.IsChecked == true);
+        Refresh();
+    }
+    private async void EnableWindowZones_Click(object sender, RoutedEventArgs e)
+    {
+        try { await _runtime.SetModuleEnabledAsync(SyncWallpaperModule.WindowEngine, true); }
+        catch (Exception ex) { System.Windows.MessageBox.Show(ex.Message, "Window Engine"); }
+        Refresh();
+    }
     private async void TestTrigger_Click(object sender, RoutedEventArgs e) { await _runtime.FireTestTriggerAsync(); Refresh(); }
     private void CaptureDisplayProfile_Click(object sender, RoutedEventArgs e) { try { _runtime.CaptureDisplayProfile("显示配置 " + DateTime.Now.ToString("yyyy-MM-dd HH-mm")); Refresh(); } catch (Exception ex) { System.Windows.MessageBox.Show(ex.Message, "显示配置"); } }
     private async void ApplyDisplayProfile_Click(object sender, RoutedEventArgs e) { var profile = _runtime.DisplayConfigurations.Profiles.LastOrDefault(); if (profile is not null) { await _runtime.ApplyDisplayProfileAsync(profile.ProfileId); Refresh(); } }
@@ -397,8 +540,29 @@ public partial class MainWindow : Window
     private static void ShowRiskPlan(string title, string text) => System.Windows.MessageBox.Show(text, title, MessageBoxButton.OK, MessageBoxImage.Information);
     private async void ShowTaskbar_Click(object sender, RoutedEventArgs e)
     {
-        try { await _runtime.SetModuleEnabledAsync(SyncWallpaperModule.TaskbarHost, true); }
+        try { await _runtime.SetModuleEnabledAsync(SyncWallpaperModule.TaskbarHost, !_runtime.IsTaskbarHostRunning); }
         catch (Exception ex) { System.Windows.MessageBox.Show(ex.Message, "任务栏宿主"); }
+        Refresh();
+    }
+    private void TaskbarAutoHide_Click(object sender, RoutedEventArgs e)
+    {
+        if (_refreshing) return;
+        var autoHide = TaskbarAutoHideCheck.IsChecked == true;
+        TaskbarReserveWorkAreaCheck.IsEnabled = !autoHide;
+        if (autoHide) TaskbarReserveWorkAreaCheck.IsChecked = false;
+    }
+    private async void ApplyTaskbarBehavior_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await _runtime.UpdateTaskbarPreferencesAsync(
+                TaskbarAutoHideCheck.IsChecked == true,
+                TaskbarReserveWorkAreaCheck.IsChecked == true);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(ex.Message, "任务栏行为", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
         Refresh();
     }
     private async void StartSaver_Click(object sender, RoutedEventArgs e)
@@ -408,7 +572,7 @@ public partial class MainWindow : Window
         Refresh();
     }
     private void ClearFade_Click(object sender, RoutedEventArgs e) => _fading.Clear();
-    protected override void OnClosed(EventArgs e) { _runtime.StateChanged -= Runtime_StateChanged; _fading.Dispose(); base.OnClosed(e); }
+    protected override void OnClosed(EventArgs e) { _windowVisible = false; _runtime.StateChanged -= Runtime_StateChanged; _fading.Dispose(); base.OnClosed(e); }
     private bool ConfirmDelete(string name) => System.Windows.MessageBox.Show($"删除“{name}”？此操作会从本机配置中移除档案。", "删除保护", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
     private static void ExportJson(string fileName, object value)
     {
@@ -439,20 +603,31 @@ public partial class MainWindow : Window
     }
     private string RoleForMonitor(MonitorIdentity monitor)
     {
-        var mappedRole = _runtime.LastMatch?.RoleMatches
-            .FirstOrDefault(x => x.Value.MonitorDevicePath.Equals(monitor.MonitorDevicePath, StringComparison.OrdinalIgnoreCase)).Key;
-        return !string.IsNullOrWhiteSpace(mappedRole)
-            ? mappedRole
+        var binding = BindingForMonitor(monitor);
+        return binding is not null
+            ? binding.Role
             : monitor.IsInternal ? "Laptop" : monitor.Width >= monitor.Height ? "Landscape" : "Portrait";
     }
 
-    private string WallpaperForRole(string role)
+    private MonitorRoleBinding? BindingForMonitor(MonitorIdentity monitor)
+    {
+        var match = _runtime.LastMatch;
+        if (match?.Profile is null) return null;
+        foreach (var binding in match.Profile.Roles)
+        {
+            if (!match.TryGetMonitor(binding, out var mapped)) continue;
+            if (mapped.MonitorDevicePath.Equals(monitor.MonitorDevicePath, StringComparison.OrdinalIgnoreCase))
+                return binding;
+        }
+        return null;
+    }
+
+    private string WallpaperForMonitor(MonitorIdentity monitor)
     {
         if (_runtime.LastMatch?.Status == MatchStatus.Ambiguous)
             return "壁纸：待手动确认";
 
-        var binding = _runtime.LastMatch?.Profile?.Roles
-            .FirstOrDefault(x => x.Role.Equals(role, StringComparison.OrdinalIgnoreCase));
+        var binding = BindingForMonitor(monitor);
         if (binding is null)
             return "壁纸：未配置";
 
@@ -472,8 +647,17 @@ public partial class MainWindow : Window
     private sealed record DisplayProfileItem(string Name, int MonitorCount, string Modified);
     private sealed record AudioProfileItem(string Name, int AssignmentCount);
     private sealed record DesktopProfileItem(string Name, int ItemCount);
+    private sealed record ZoneMonitorItem(string StableId, string Label, string Details);
+    private sealed record ZoneLayoutItem(string Name, string Details);
     private sealed record ModuleItem(SyncWallpaperModule Id, string Name, string State, string Details);
     private sealed record WallpaperProfileItem(string Id, string Name, string State, string Details, string Updated);
+
+    private static bool HasStableZoneIdentity(MonitorIdentity monitor)
+        => !string.IsNullOrWhiteSpace(monitor.StableId)
+            && monitor.StableIdSource is MonitorIdentitySource.EdidSerial
+                or MonitorIdentitySource.MonitorDevicePath
+                or MonitorIdentitySource.InstanceName
+                or MonitorIdentitySource.HardwareTopology;
 
     private WallpaperProfileItem ToWallpaperProfileItem(WallpaperProfile profile)
     {

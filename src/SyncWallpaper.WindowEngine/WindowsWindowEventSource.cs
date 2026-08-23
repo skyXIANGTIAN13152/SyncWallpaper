@@ -2,7 +2,13 @@ using System.Runtime.InteropServices;
 
 namespace SyncWallpaper.WindowEngine;
 
-public sealed class WindowsWindowEventSource : IDisposable
+public interface IWindowEventSource : IDisposable
+{
+    event EventHandler<WindowEvent>? EventReceived;
+    bool IsActive { get; }
+}
+
+public sealed class WindowsWindowEventSource : IWindowEventSource
 {
     private readonly WinEventDelegate _callback;
     private IntPtr _hook;

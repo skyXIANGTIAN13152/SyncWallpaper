@@ -9,7 +9,7 @@ public enum MonitorIdentitySource { Unknown, EdidSerial, ContainerId, MonitorDev
 
 public sealed class MonitorIdentity
 {
-    public int SchemaVersion { get; set; } = 2;
+    public int SchemaVersion { get; set; } = 4;
     /// <summary>Temporary Windows name (for example \\.\DISPLAY1). Never use this as a permanent key.</summary>
     public string WindowsDisplayName { get; set; } = string.Empty;
     public string MonitorDevicePath { get; set; } = string.Empty;
@@ -71,7 +71,7 @@ public sealed class MonitorIdentity
 
 public sealed class MonitorRoleBinding
 {
-    public int SchemaVersion { get; set; } = 2;
+    public int SchemaVersion { get; set; } = 4;
     public string RoleId { get; set; } = Guid.NewGuid().ToString("N");
     public string Role { get; set; } = "Laptop";
     public string DisplayName { get; set; } = "笔记本本体";
@@ -89,7 +89,7 @@ public sealed class MonitorRoleBinding
 public sealed class WallpaperProfile
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public int SchemaVersion { get; set; } = 2;
+    public int SchemaVersion { get; set; } = 4;
     public string Name { get; set; } = string.Empty;
     public DisplayCombinationKind Combination { get; set; } = DisplayCombinationKind.Custom;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -124,15 +124,19 @@ public sealed class WallpaperAsset
 
 public sealed class AppSettings
 {
-    public int SchemaVersion { get; set; } = 1;
+    public int SchemaVersion { get; set; } = 2;
     public bool AutoMatchEnabled { get; set; } = true;
     public bool StartWithWindows { get; set; } = false;
-    public bool ReduceMotion { get; set; } = false;
-    public bool LowPerformanceMode { get; set; } = false;
-    public bool DisableBackgroundGlow { get; set; } = false;
+    public bool LowPerformanceMode { get; set; } = true;
     public bool SafeMode { get; set; }
     public string SafeModeReason { get; set; } = string.Empty;
     public int ConsecutiveStartupFailures { get; set; }
+    /// <summary>The profile last chosen for editing; applying a profile never changes this value.</summary>
+    public string? EditingProfileId { get; set; }
+    /// <summary>The profile most recently matched and applied successfully.</summary>
+    public string? LastMatchedProfileId { get; set; }
+    /// <summary>Legacy v1 field, consumed once during migration and no longer written.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ActiveProfileId { get; set; }
     public string? DataRoot { get; set; }
     /// <summary>GitHub Release checks are opt-in and never download or install files.</summary>
@@ -152,7 +156,7 @@ public sealed class LibraryDocument
 
 public sealed class ProfilesDocument
 {
-    public int SchemaVersion { get; set; } = 2;
+    public int SchemaVersion { get; set; } = 4;
     public List<WallpaperProfile> Profiles { get; set; } = new();
 }
 
@@ -170,15 +174,32 @@ public sealed class MatchResult
 {
     public MatchStatus Status { get; init; }
     public WallpaperProfile? Profile { get; init; }
+    /// <summary>
+    /// Runtime monitor assignments keyed by the binding's stable RoleId.
+    /// Logical role names are not unique: a profile may legitimately contain
+    /// two Landscape displays, so using Role as the key would drop one screen.
+    /// </summary>
     public Dictionary<string, MonitorIdentity> RoleMatches { get; init; } = new(StringComparer.OrdinalIgnoreCase);
     public List<MatchEvidence> Evidence { get; init; } = new();
     public int Score { get; init; }
     public int RunnerUpScore { get; init; }
+    /// <summary>Normalized from the weakest role; independent of monitor count.</summary>
+    public int Confidence { get; init; }
     public string Message { get; init; } = string.Empty;
     public DisplayIdentityMatchStatus IdentityStatus { get; init; } = DisplayIdentityMatchStatus.Unknown;
     public bool CanAutoApply { get; init; }
     public IReadOnlyList<string> ConflictingFields { get; init; } = Array.Empty<string>();
-    public int Confidence => Score <= 0 ? 0 : Math.Clamp((int)(100.0 * Score / Math.Max(Score, 1000)), 0, 100);
+
+    public bool TryGetMonitor(MonitorRoleBinding binding, out MonitorIdentity monitor)
+    {
+        if (!string.IsNullOrWhiteSpace(binding.RoleId)
+            && RoleMatches.TryGetValue(binding.RoleId, out monitor!))
+            return true;
+
+        // Compatibility for MatchResult instances created before RoleId
+        // became the runtime assignment key.
+        return RoleMatches.TryGetValue(binding.Role, out monitor!);
+    }
 }
 
 public sealed class DisplaySnapshot

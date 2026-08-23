@@ -13,8 +13,8 @@ public class ProfileMatcherTests
         var profile = Profile("双屏", ("Landscape", left), ("Landscape2", right));
         var result = new ProfileMatcher().Match(new[] { right, left }, new[] { profile });
         Assert.AreEqual(MatchStatus.Exact, result.Status);
-        Assert.AreEqual("SERIAL-A", result.RoleMatches["Landscape"].EdidSerialNumber);
-        Assert.AreEqual("SERIAL-B", result.RoleMatches["Landscape2"].EdidSerialNumber);
+        Assert.AreEqual("SERIAL-A", result.RoleMatches[profile.Roles[0].RoleId].EdidSerialNumber);
+        Assert.AreEqual("SERIAL-B", result.RoleMatches[profile.Roles[1].RoleId].EdidSerialNumber);
     }
 
     [TestMethod]
@@ -40,9 +40,27 @@ public class ProfileMatcherTests
     {
         var laptop = Monitor("TMA", "0803", "L-1", "L", 0, true);
         var landscape = Monitor("AOC", "B426", "A-1", "A", 1);
-        var result = new ProfileMatcher().Match(new[] { landscape, laptop }, new[] { Profile("模式", ("Laptop", laptop), ("Landscape", landscape)) });
-        Assert.AreEqual("L-1", result.RoleMatches["Laptop"].EdidSerialNumber);
-        Assert.AreEqual("A-1", result.RoleMatches["Landscape"].EdidSerialNumber);
+        var profile = Profile("模式", ("Laptop", laptop), ("Landscape", landscape));
+        var result = new ProfileMatcher().Match(new[] { landscape, laptop }, new[] { profile });
+        Assert.AreEqual("L-1", result.RoleMatches[profile.Roles[0].RoleId].EdidSerialNumber);
+        Assert.AreEqual("A-1", result.RoleMatches[profile.Roles[1].RoleId].EdidSerialNumber);
+    }
+
+    [TestMethod]
+    public void DuplicateLogicalRoleNames_KeepDistinctRoleIdAssignments()
+    {
+        var first = Monitor("HPN", "3481", "SERIAL-A", "PATH-A", 0);
+        var second = Monitor("HWP", "309E", "SERIAL-B", "PATH-B", 1);
+        var profile = Profile("两个横屏", ("Landscape", first), ("Landscape", second));
+
+        var result = new ProfileMatcher().Match(new[] { second, first }, new[] { profile });
+
+        Assert.AreEqual(MatchStatus.Exact, result.Status);
+        Assert.AreEqual(2, result.RoleMatches.Count);
+        Assert.IsTrue(result.TryGetMonitor(profile.Roles[0], out var firstMatch));
+        Assert.IsTrue(result.TryGetMonitor(profile.Roles[1], out var secondMatch));
+        Assert.AreEqual("SERIAL-A", firstMatch.EdidSerialNumber);
+        Assert.AreEqual("SERIAL-B", secondMatch.EdidSerialNumber);
     }
 
     [TestMethod]
@@ -86,6 +104,39 @@ public class ProfileMatcherTests
         Assert.AreEqual(MatchStatus.Exact, result.Status);
         Assert.AreEqual(17, profile.Priority);
         Assert.AreEqual(modified, profile.ModifiedAt);
+    }
+
+    [TestMethod]
+    public void AddingProbableDisplaysDoesNotInflateConfidenceOrEnableAutoApply()
+    {
+        var monitors = Enumerable.Range(0, 3).Select(index =>
+        {
+            var monitor = Monitor("AOC", "B426", "0", string.Empty, index);
+            monitor.AdapterId = string.Empty;
+            return monitor;
+        }).ToArray();
+        var profile = Profile("弱证据三屏",
+            ("A", monitors[0]), ("B", monitors[1]), ("C", monitors[2]));
+
+        var result = new ProfileMatcher().Match(monitors.Select(x => x.Clone()).ToArray(), new[] { profile });
+
+        Assert.AreEqual(MatchStatus.Ambiguous, result.Status);
+        Assert.IsFalse(result.CanAutoApply);
+        Assert.IsTrue(result.Confidence < profile.MinimumConfidence);
+    }
+
+    [TestMethod]
+    public void HardwareTopologyWithConnectorZeroRemainsStrong()
+    {
+        var expected = Monitor("AOC", "B426", "0", string.Empty, 0);
+        expected.ConnectorInstance = 0;
+        var actual = expected.Clone();
+
+        var result = new ProfileMatcher().Match(new[] { actual }, new[] { Profile("硬件身份", ("Landscape", expected)) });
+
+        Assert.AreEqual(MatchStatus.Exact, result.Status);
+        Assert.IsTrue(result.CanAutoApply);
+        Assert.IsTrue(result.Confidence >= 80);
     }
 
     private static MonitorIdentity Monitor(string manufacturer, string product, string serial, string path, int x, bool internalDisplay = false) => new()
