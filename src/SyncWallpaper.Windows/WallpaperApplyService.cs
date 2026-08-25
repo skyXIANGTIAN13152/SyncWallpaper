@@ -167,6 +167,9 @@ public sealed class WallpaperApplyService
     {
         var status = new WallpaperTransactionStatus(generation, state, started, completed, applied, expected, retries, rollbackSucceeded, message);
         _lastTransaction = status;
+        if (state is WallpaperTransactionState.Completed or WallpaperTransactionState.Failed
+            or WallpaperTransactionState.RollbackFailed or WallpaperTransactionState.Cancelled)
+            _log($"{message}；已处理 {applied}/{expected} 台；重试 {retries} 次");
         try { TransactionChanged?.Invoke(this, status); } catch { /* telemetry must never break wallpaper recovery */ }
     }
 

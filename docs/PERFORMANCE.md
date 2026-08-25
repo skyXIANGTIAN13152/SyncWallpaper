@@ -1,17 +1,9 @@
-# Performance and resource accounting
+# 性能
 
-Diagnostics records Working Set, Private Bytes, handle count, threads, GDI/USER objects, CPU seconds, module PID and startup time. Resource samples are local and are not uploaded.
+屏序是单进程、事件驱动的壁纸监测程序。显示器无变化时不轮询拓扑，也不创建任务栏、Shell、远程、在线或其他功能进程。
 
-The event path is notification driven. There is no high-frequency topology polling: a signal schedules a bounded stabilization window (2 seconds initial delay, 250 ms sample interval, 10 second maximum). Identical signatures are deduplicated.
+普通显示事件等待约 2 秒并取得两次相同快照，最长稳定等待 10 秒；重复签名不会重复应用。登录启动使用一次立即检测。
 
-The repository test suite exercises a 10,000-signal virtual burst and bounded cancellation. `SyncWallpaper.Diagnostics soak` samples the core and a self-created host; it does not change the real desktop. A six-hour soak, 24-hour equivalent and mixed-DPI hardware run remain manual evidence rather than a claim.
+低资源模式把渲染缓存限制为 128 MiB；普通模式为 512 MiB。缓存按最近使用时间清理。主窗口隐藏后不持续重建界面，托盘图标只在状态变化时重绘。
 
-Compare Lightweight, Standard, Full and Custom modes using the same login session and monitor topology. Record UI closed and UI open separately; Taskbar/Shell/Remote/Online processes should be absent in Lightweight.
-
-## RC1 measured sample
-
-The final package read-only snapshot observed 3 displays and an Explorer process. The self-contained Diagnostics process itself was 37,654,528 bytes Working Set at that instant.
-
-The final real-time sample ran from 2026-08-05T03:13:49Z to 03:14:50Z: 60.6 seconds of monotonic active time, 13 samples at 5 seconds, 0 seconds excluded for sleep, and qualified12Hour=false. Self Working Set was 34,770,944 / 47,716,825 / 52,678,656 bytes (min/average/max), Private Bytes 9,773,056 / 12,441,127 / 15,167,488 bytes, handles 284 / 350 / 361, CPU seconds 0.08 / 0.37 / 0.66. The test host stayed isolated and no display or wallpaper mutation was performed.
-
-The 100,000-event accelerated run completed in 174.5 ms with one stable emission. It is a concurrency/resource test, not elapsed wall-clock soak evidence. UI-open, mixed-DPI, 2/8/12-hour and real hotplug measurements remain Not Run.
+性能验收记录 Working Set、Private Bytes、Handle Count、CPU 和启动时间。`SyncWallpaper.Diagnostics monitor-soak` 可以重复执行只读显示器发现并报告句柄增量；它不会更改显示器或壁纸。

@@ -1,16 +1,16 @@
-# Real hardware verification checklist
+# 真实硬件验证清单
 
-This checklist is intentionally manual. Do not run it unattended and do not automate Explorer termination, display mode changes, audio switching or sleep.
+- [ ] 启动后确认当前显示器数量、型号、分辨率、刷新率、DPI、HDR、方向/翻转和接口均正确。
+- [ ] 确认内部屏与每块外接屏都有可解释的稳定身份来源。
+- [ ] 仅连接笔记本屏，确认 Laptop 组合自动匹配并应用。
+- [ ] 逐一连接 HDMI、DP、USB-C 组合，等待拓扑稳定并检查壁纸。
+- [ ] 交换两台同型号屏幕的接口：有序列号时身份跟随物理屏；无序列号且有歧义时必须要求确认。
+- [ ] 旋转竖屏，确认界面按 Windows 规则显示“纵向/横向”和“已翻转/未翻转”。
+- [ ] 手动应用一个组合，确认不会改写自动匹配选择或组合元数据。
+- [ ] 重新登录，确认匹配组合在开机后自动应用，不需要再次插拔显示器。
+- [ ] 手动睡眠/唤醒和锁定/解锁，确认屏序恢复监测并保持正确壁纸。
+- [ ] 在保存工作的前提下重启 Explorer，确认主进程存活并重新验证壁纸。
+- [ ] 连续插拔后检查进程 Working Set、Private Bytes、句柄和 CPU 没有持续增长。
+- [ ] 导出脱敏报告，分享前人工检查内容。
 
-- [ ] Capture a read-only baseline snapshot and note Windows build, GPU driver and connected ports.
-- [ ] Confirm internal panel and each monitor expose monitorDevicePath, adapter/target and geometry.
-- [ ] Disconnect all external displays; verify Laptop Only applies without changing the Windows display mode.
-- [ ] Connect HDMI, DP and USB-C combinations one at a time; wait for the 2-second debounce and two equal samples.
-- [ ] Swap two identical monitors between ports. With serials, identity must follow the monitor; without serials the app must request confirmation.
-- [ ] Rotate a portrait display and verify geometry/rotation evidence without permanent number matching.
-- [ ] Lock/unlock and suspend/resume manually; compare before/after snapshots and wallpaper paths.
-- [ ] Restart Explorer only after saving work and confirming the risk dialog; verify the core host remains alive.
-- [ ] Close every optional module and verify process exit, hook/COM cleanup and stable handle count.
-- [ ] Export a sanitized diagnostic report and inspect it for personal paths before sharing.
-
-Record each result, timestamp, driver version and whether the step was skipped. Beta claims only include steps actually completed on hardware.
+所有步骤只观察或应用壁纸，不修改 Windows 显示参数。

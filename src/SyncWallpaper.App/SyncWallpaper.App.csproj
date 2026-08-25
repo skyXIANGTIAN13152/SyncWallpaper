@@ -16,11 +16,6 @@
   <ItemGroup>
     <ProjectReference Include="..\SyncWallpaper.Core\SyncWallpaper.Core.csproj" />
     <ProjectReference Include="..\SyncWallpaper.Windows\SyncWallpaper.Windows.csproj" />
-    <ProjectReference Include="..\SyncWallpaper.DisplayEngine\SyncWallpaper.DisplayEngine.csproj" />
-    <ProjectReference Include="..\SyncWallpaper.AudioEngine\SyncWallpaper.AudioEngine.csproj" />
-    <ProjectReference Include="..\SyncWallpaper.WindowEngine\SyncWallpaper.WindowEngine.csproj" />
-    <ProjectReference Include="..\SyncWallpaper.Automation\SyncWallpaper.Automation.csproj" />
-    <ProjectReference Include="..\SyncWallpaper.DesktopEngine\SyncWallpaper.DesktopEngine.csproj" />
     <ProjectReference Include="..\SyncWallpaper.Update.Core\SyncWallpaper.Update.Core.csproj" />
   </ItemGroup>
 

@@ -1,10 +1,9 @@
-# Known limitations
+# 已知限制
 
-- ContainerId and WMI availability depends on the display driver and session. SetupAPI is optional and gracefully degrades.
-- A fallback geometry path is used only when QueryDisplayConfig is unavailable; it is marked as fallback and must not be treated as a hardware serial.
-- `IDesktopWallpaper` has a process-wide position setting. Per-monitor rendering is used for all modes; Span is best-effort and should be verified on the target Windows build.
-- The current release has a process-isolated secondary taskbar with grouping, pins, DWM previews, clock and bottom-edge auto-hide, but it is not a complete Explorer replacement. AppBar work-area reservation is enabled only for one secondary display; multiple secondary displays use a safe overlay fallback because current Shell behavior can assign several insets to one monitor.
-- Windows exposes no stable public API for mirroring every third-party notification-area icon. SyncWallpaper does not inject into Explorer or enumerate undocumented internal toolbars, so full notification-area mirroring remains unavailable.
-- Audio, display mode, Explorer restart and power actions are not automatically exercised by CI.
-- Windows 10, Windows 11, mixed-DPI, sleep/wake and identical-monitor behavior require the manual checklist for Verified status.
-- Online wallpaper providers and RemoteHost are intentionally disabled in the default install and have no network transport in Beta.
+- 仅支持 Windows 10/11。
+- EDID、WMI、ContainerId 和接口字段的可用性取决于显示器、转接器和显卡驱动。
+- 两台同型号显示器没有可靠序列号且身份仍有歧义时，需要重新进行 A/B/C 人工确认。
+- `IDesktopWallpaper` 的位置模式是全局设置；屏序通过按目标尺寸预渲染减少多屏宽高比差异。
+- Span 为尽力而为，需在目标 Windows 版本与实际布局上验证。
+- Windows 10、更多混合 DPI 组合、真实睡眠唤醒和 Explorer 强制重启仍需持续硬件验证。
+- 应用未签名；首次运行可能出现 SmartScreen 提示。

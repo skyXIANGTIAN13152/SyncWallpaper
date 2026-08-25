@@ -33,4 +33,4 @@ Release Notes 作为不可信纯文本交给 WPF `TextBlock`，上限 12,000 字
 
 ## 产品边界
 
-当前没有 `SyncWallpaper.Updater` 产品调用，也不发布 Updater.exe。不存在更新 staging、更新备份、更新事务恢复、自动关闭主程序、自动替换文件、健康检查或自动回滚流程。普通 `ConfigurationStore` 的 `.bak` 配置恢复与此无关，继续保留。
+当前没有 `SyncWallpaper.Updater` 产品调用，也不发布 Updater.exe。不存在更新 staging、更新备份、更新事务恢复、自动关闭主程序、自动替换文件、健康检查或自动回滚流程。产品也不生成普通配置历史备份。

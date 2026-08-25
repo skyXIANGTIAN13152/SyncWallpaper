@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Forms;
-using System.Windows.Input;
 using SyncWallpaper.Update.Core;
 using SyncWallpaper.Windows;
 
@@ -12,15 +11,13 @@ public partial class App : System.Windows.Application
     private AppRuntime? _runtime;
     private NotifyIcon? _tray;
     private MainWindow? _window;
-    private GlobalHotkeyService? _hotkeys;
-    private bool _background;
     private bool _validationMode;
     private TrayIconState? _trayState;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-        _background = e.Args.Any(a => a.Equals("--background", StringComparison.OrdinalIgnoreCase));
+        var background = e.Args.Any(a => a.Equals("--background", StringComparison.OrdinalIgnoreCase));
         _validationMode = e.Args.Any(a => a.Equals("--validation", StringComparison.OrdinalIgnoreCase));
         _singleInstance = new SingleInstanceService();
         if (!_singleInstance.TryAcquire())
@@ -29,23 +26,32 @@ public partial class App : System.Windows.Application
             Shutdown();
             return;
         }
+
         _runtime = new AppRuntime();
         _runtime.StateChanged += (_, _) => Dispatcher.InvokeAsync(UpdateTray);
         _trayState = _runtime.TrayVisualState;
-        _tray = new NotifyIcon { Icon = TrayIconRenderer.Create(_trayState.Value), Visible = true, Text = "屏序 SyncWallpaper" };
+        _tray = new NotifyIcon
+        {
+            Icon = TrayIconRenderer.Create(_trayState.Value),
+            Visible = true,
+            Text = "屏序 SyncWallpaper"
+        };
         _tray.DoubleClick += (_, _) => ShowMainWindow();
         _tray.ContextMenuStrip = BuildTrayMenu();
         _singleInstance.StartActivationListener(() => Dispatcher.InvokeAsync(ShowMainWindow));
         _runtime.Start(_validationMode);
-        if (!_background) ShowMainWindow();
+        if (!background) ShowMainWindow();
     }
 
     private ContextMenuStrip BuildTrayMenu()
     {
         var menu = new ContextMenuStrip();
-        menu.Items.Add("当前状态", null, (_, _) => ShowMainWindow());
+        menu.Items.Add("打开屏序", null, (_, _) => ShowMainWindow());
         menu.Items.Add("重新检测显示器", null, async (_, _) => await (_runtime?.DetectAsync() ?? Task.CompletedTask));
-        menu.Items.Add("重新应用壁纸", null, async (_, _) => await (_runtime?.ReapplyAsync() ?? Task.CompletedTask));
+        menu.Items.Add("重新应用已匹配壁纸", null, async (_, _) => await (_runtime?.ReapplyAsync() ?? Task.CompletedTask));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("启用自动匹配", null, (_, _) => _runtime?.SetAutoMatch(true));
+        menu.Items.Add("暂停自动切换", null, (_, _) => _runtime?.SetAutoMatch(false));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("检查更新", null, async (_, _) =>
         {
@@ -59,7 +65,7 @@ public partial class App : System.Windows.Application
             else if (result.Status == UpdateCheckStatus.UpToDate)
                 _tray?.ShowBalloonTip(1800, "屏序 SyncWallpaper", "当前已是最新版本。", ToolTipIcon.Info);
             else
-                _tray?.ShowBalloonTip(2200, "屏序 SyncWallpaper", result.UserMessage ?? "暂时无法检查更新，请稍后重试。", ToolTipIcon.Warning);
+                _tray?.ShowBalloonTip(2200, "屏序 SyncWallpaper", result.UserMessage ?? "暂时无法检查更新。", ToolTipIcon.Warning);
         });
         menu.Items.Add("查看 GitHub 项目", null, (_, _) =>
         {
@@ -67,11 +73,6 @@ public partial class App : System.Windows.Application
                 _tray?.ShowBalloonTip(2200, "屏序 SyncWallpaper", "尚未配置 GitHub 仓库地址。", ToolTipIcon.Info);
         });
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("打开屏序", null, (_, _) => ShowMainWindow());
-        menu.Items.Add("切换独立副屏任务栏", null, async (_, _) => { if (_runtime is not null) await _runtime.SetModuleEnabledAsync(SyncWallpaper.Core.SyncWallpaperModule.TaskbarHost, !_runtime.IsTaskbarHostRunning); });
-        menu.Items.Add("启用独立屏保宿主", null, async (_, _) => { if (_runtime is not null) await _runtime.SetModuleEnabledAsync(SyncWallpaper.Core.SyncWallpaperModule.ScreenSaverHost, true); });
-        menu.Items.Add("启用自动匹配", null, (_, _) => { if (_runtime is not null) _runtime.Settings.AutoMatchEnabled = true; });
-        menu.Items.Add("暂停自动切换", null, (_, _) => { if (_runtime is not null) _runtime.Settings.AutoMatchEnabled = false; });
         menu.Items.Add("退出", null, (_, _) => ShutdownFromTray());
         return menu;
     }
@@ -81,16 +82,16 @@ public partial class App : System.Windows.Application
         if (_window is null)
         {
             _window = new MainWindow(_runtime!);
-            _window.Closing += (_, args) => { if (!_window.AllowExit) { args.Cancel = true; _window.Hide(); } };
-            if (_runtime!.Settings.Modules.IsEnabled(SyncWallpaper.Core.SyncWallpaperModule.Automation))
+            _window.Closing += (_, args) =>
             {
-                _hotkeys = new GlobalHotkeyService();
-                _hotkeys.Attach(_window);
-            }
+                if (_window.AllowExit) return;
+                args.Cancel = true;
+                _window.Hide();
+            };
         }
-        _window.Show(); _window.WindowState = WindowState.Normal; _window.Activate();
-        if (_runtime!.Settings.Modules.IsEnabled(SyncWallpaper.Core.SyncWallpaperModule.Automation))
-            _hotkeys?.Register((uint)(ModifierKeys.Control | ModifierKeys.Alt), Key.S, ShowMainWindow);
+        _window.Show();
+        _window.WindowState = WindowState.Normal;
+        _window.Activate();
     }
 
     private void UpdateTray()
@@ -110,14 +111,17 @@ public partial class App : System.Windows.Application
     private void ShutdownFromTray()
     {
         if (_window is not null) _window.AllowExit = true;
-        _runtime?.Dispose(); _hotkeys?.Dispose(); _tray?.Dispose(); _singleInstance?.Dispose();
+        _runtime?.Dispose();
+        _tray?.Dispose();
+        _singleInstance?.Dispose();
         Shutdown();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _runtime?.Dispose(); _hotkeys?.Dispose(); _tray?.Dispose(); _singleInstance?.Dispose();
+        _runtime?.Dispose();
+        _tray?.Dispose();
+        _singleInstance?.Dispose();
         base.OnExit(e);
     }
-
 }

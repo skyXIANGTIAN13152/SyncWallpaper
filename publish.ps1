@@ -19,9 +19,7 @@ New-Item -ItemType Directory -Force -Path $output | Out-Null
 $selfContainedValue = if ($SelfContained) { "true" } else { "false" }
 $projects = [ordered]@{
     App = "src\SyncWallpaper.App\SyncWallpaper.App.csproj"
-    Host = "src\SyncWallpaper.Host\SyncWallpaper.Host.csproj"
     Diagnostics = "src\SyncWallpaper.Diagnostics\SyncWallpaper.Diagnostics.csproj"
-    HardwareValidation = "src\SyncWallpaper.HardwareValidation\SyncWallpaper.HardwareValidation.csproj"
 }
 foreach ($entry in $projects.GetEnumerator()) {
     $destination = Join-Path $output $entry.Key
@@ -45,7 +43,7 @@ $manifest = [ordered]@{
     releaseChannel = "Stable"
     rid = "win-x64"
     selfContained = [bool]$SelfContained
-    layout = "App/ Host/ Diagnostics/ HardwareValidation/"
+    layout = "App/ Diagnostics/"
     updateMode = "GitHub Releases page; user initiated download and install"
     telemetry = $false
     automaticDownload = $false
@@ -54,7 +52,7 @@ $manifest = [ordered]@{
     startupDefault = $false
     systemMutationDefault = $false
     signed = $false
-    releaseLabel = "Unsigned Release Candidate"
+    releaseLabel = "Unsigned Wallpaper-Only Beta"
 }
 $manifest | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $output "package-manifest.json") -Encoding UTF8
 

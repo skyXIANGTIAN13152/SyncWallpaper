@@ -7,7 +7,7 @@ $target = [IO.Path]::GetFullPath($InstallRoot)
 $allowedRoot = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA "Programs"))
 if (-not $target.StartsWith($allowedRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw "卸载目录必须位于当前用户 LocalAppData\Programs 下。" }
 $targetPrefix = $target.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
-foreach ($name in @("SyncWallpaper.App", "SyncWallpaper.Host", "SyncWallpaper.Diagnostics", "SyncWallpaper.HardwareValidation")) {
+foreach ($name in @("SyncWallpaper.App", "SyncWallpaper.Diagnostics")) {
     Get-Process -Name $name -ErrorAction SilentlyContinue | ForEach-Object {
         try {
             $processPath = $_.Path

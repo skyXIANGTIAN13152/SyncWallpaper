@@ -37,7 +37,9 @@ public sealed class WallpaperTransactionStateMachine
         {
             [WallpaperTransactionState.Preparing] = new[] { WallpaperTransactionState.WaitingForStableTopology, WallpaperTransactionState.Applying, WallpaperTransactionState.Cancelled, WallpaperTransactionState.Superseded, WallpaperTransactionState.Failed },
             [WallpaperTransactionState.WaitingForStableTopology] = new[] { WallpaperTransactionState.Applying, WallpaperTransactionState.Cancelled, WallpaperTransactionState.Superseded, WallpaperTransactionState.Failed },
-            [WallpaperTransactionState.Applying] = new[] { WallpaperTransactionState.Verifying, WallpaperTransactionState.Retrying, WallpaperTransactionState.RollingBack, WallpaperTransactionState.Cancelled, WallpaperTransactionState.Superseded, WallpaperTransactionState.Failed },
+            // A no-op transaction can complete directly when every active
+            // monitor already points at its rendered target path.
+            [WallpaperTransactionState.Applying] = new[] { WallpaperTransactionState.Verifying, WallpaperTransactionState.Retrying, WallpaperTransactionState.RollingBack, WallpaperTransactionState.Completed, WallpaperTransactionState.Cancelled, WallpaperTransactionState.Superseded, WallpaperTransactionState.Failed },
             [WallpaperTransactionState.Verifying] = new[] { WallpaperTransactionState.Completed, WallpaperTransactionState.Retrying, WallpaperTransactionState.RollingBack, WallpaperTransactionState.Failed, WallpaperTransactionState.Cancelled, WallpaperTransactionState.Superseded },
             [WallpaperTransactionState.Retrying] = new[] { WallpaperTransactionState.Applying, WallpaperTransactionState.Verifying, WallpaperTransactionState.RollingBack, WallpaperTransactionState.Failed, WallpaperTransactionState.Cancelled, WallpaperTransactionState.Superseded },
             [WallpaperTransactionState.RollingBack] = new[] { WallpaperTransactionState.Failed, WallpaperTransactionState.RollbackFailed, WallpaperTransactionState.Cancelled },

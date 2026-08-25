@@ -7,7 +7,7 @@ using SyncWallpaper.Core;
 
 namespace SyncWallpaper.Windows;
 
-public sealed class LogService : IStage1Logger
+public sealed class LogService
 {
     private const long MaxBytes = 1024 * 1024;
     private readonly string _directory;

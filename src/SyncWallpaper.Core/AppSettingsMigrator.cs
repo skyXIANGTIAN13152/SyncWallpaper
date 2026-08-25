@@ -2,7 +2,7 @@ namespace SyncWallpaper.Core;
 
 public static class AppSettingsMigrator
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     public static bool Migrate(AppSettings settings)
     {

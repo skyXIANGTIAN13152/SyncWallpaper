@@ -32,8 +32,8 @@ if ($CreateShortcuts) {
         $shortcut.TargetPath = Join-Path $target "App\SyncWallpaper.App.exe"
         $shortcut.WorkingDirectory = Join-Path $target "App"
         $shortcut.Description = $link.Description
-        $shortcut.IconLocation = Join-Path $target "App\AppIcon.ico"
+        $shortcut.IconLocation = (Join-Path $target "App\SyncWallpaper.App.exe") + ",0"
         $shortcut.Save()
     }
 }
-Write-Host "已安装到 $target；不会自动修改显示器、壁纸或电源。开机自启默认保持关闭。"
+Write-Host "已安装到 $target；不会修改 Windows 显示参数或电源。是否开机自启由 -StartWithWindows 选择。"

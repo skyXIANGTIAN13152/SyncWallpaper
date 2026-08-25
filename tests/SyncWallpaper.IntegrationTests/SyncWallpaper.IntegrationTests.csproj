@@ -9,13 +9,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\SyncWallpaper.Core\SyncWallpaper.Core.csproj" />
-    <ProjectReference Include="..\..\src\SyncWallpaper.DisplayEngine\SyncWallpaper.DisplayEngine.csproj" />
     <ProjectReference Include="..\..\src\SyncWallpaper.Windows\SyncWallpaper.Windows.csproj" />
-    <ProjectReference Include="..\..\src\SyncWallpaper.AudioEngine\SyncWallpaper.AudioEngine.csproj" />
-    <ProjectReference Include="..\..\src\SyncWallpaper.DesktopEngine\SyncWallpaper.DesktopEngine.csproj" />
-    <ProjectReference Include="..\..\src\SyncWallpaper.WindowEngine\SyncWallpaper.WindowEngine.csproj" />
-    <ProjectReference Include="..\..\src\SyncWallpaper.App\SyncWallpaper.App.csproj" />
-    <ProjectReference Include="..\..\src\SyncWallpaper.TaskbarHost\SyncWallpaper.TaskbarHost.csproj" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="MSTest.TestAdapter" Version="3.1.1" />
     <PackageReference Include="MSTest.TestFramework" Version="3.1.1" />

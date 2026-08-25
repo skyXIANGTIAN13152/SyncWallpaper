@@ -124,7 +124,7 @@ public sealed class WallpaperAsset
 
 public sealed class AppSettings
 {
-    public int SchemaVersion { get; set; } = 2;
+    public int SchemaVersion { get; set; } = 3;
     public bool AutoMatchEnabled { get; set; } = true;
     public bool StartWithWindows { get; set; } = false;
     public bool LowPerformanceMode { get; set; } = true;
@@ -144,8 +144,6 @@ public sealed class AppSettings
     public string UpdateChannel { get; set; } = "Stable";
     public DateTimeOffset? LastUpdateSuccessfulCheckUtc { get; set; }
     public DateTimeOffset? LastUpdateAttemptUtc { get; set; }
-    /// <summary>Default is intentionally lightweight: only the core host and wallpaper matcher run.</summary>
-    public ModuleConfiguration Modules { get; set; } = new();
 }
 
 public sealed class LibraryDocument

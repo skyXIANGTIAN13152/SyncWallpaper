@@ -57,21 +57,6 @@ public sealed class WallpaperLibraryService
         doc.Assets.Add(asset); _store.Save("library.json", doc); return asset;
     }
 
-    public bool SoftDelete(string assetId, ProfilesDocument profiles)
-    {
-        var doc = Load(); var asset = doc.Assets.FirstOrDefault(a => a.Id.Equals(assetId, StringComparison.OrdinalIgnoreCase));
-        if (asset is null) return false;
-        if (profiles.Profiles.SelectMany(p => p.Roles).Any(r => r.WallpaperAssetId.Equals(assetId, StringComparison.OrdinalIgnoreCase)))
-            return false;
-        var path = Path.Combine(_store.Paths.Root, asset.ManagedRelativePath.Replace('/', Path.DirectorySeparatorChar));
-        if (File.Exists(path))
-        {
-            Directory.CreateDirectory(_store.Paths.Deleted);
-            File.Move(path, Path.Combine(_store.Paths.Deleted, Path.GetFileName(path) + "." + DateTime.UtcNow.ToString("yyyyMMddHHmmss")), true);
-        }
-        doc.Assets.Remove(asset); _store.Save("library.json", doc); return true;
-    }
-
     private string ResolvePath(WallpaperAsset asset)
         => asset.StorageMode.Equals("External", StringComparison.OrdinalIgnoreCase)
             ? asset.ExternalPath ?? string.Empty

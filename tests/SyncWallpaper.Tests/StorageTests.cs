@@ -17,25 +17,8 @@ public class StorageTests
             store.Save("settings.json", new AppSettings { EditingProfileId = "second" });
             var loaded = store.Load("settings.json", new AppSettings());
             Assert.AreEqual("second", loaded.EditingProfileId);
-            Assert.IsFalse(File.Exists(Path.Combine(root, "Backups", "settings.json.bak")));
+            Assert.IsFalse(Directory.Exists(Path.Combine(root, "Backups")));
             Assert.IsFalse(File.Exists(Path.Combine(root, "Config", "settings.json.tmp")));
-        }
-        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
-    }
-
-    [TestMethod]
-    public void ConfigurationStoreKeepsFiveRecoveryPointsAndRestoresExplicitly()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "SyncWallpaperTests", Guid.NewGuid().ToString("N"));
-        try
-        {
-            var store = new ConfigurationStore(new DataPaths(root), recoveryVersions: 5);
-            for (var i = 0; i < 7; i++) store.Save("settings.json", new AppSettings { EditingProfileId = "v" + i });
-            var recovery = store.ListRecoveryPoints("settings.json");
-            Assert.IsTrue(recovery.Count >= 5);
-            Assert.IsTrue(recovery.Count <= 6);
-            store.Restore("settings.json", 2);
-            Assert.AreEqual("v4", store.Load("settings.json", new AppSettings()).EditingProfileId);
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
@@ -68,7 +51,7 @@ public class StorageTests
         var changed = AppSettingsMigrator.Migrate(settings);
 
         Assert.IsTrue(changed);
-        Assert.AreEqual(2, settings.SchemaVersion);
+        Assert.AreEqual(3, settings.SchemaVersion);
         Assert.AreEqual("legacy-profile", settings.EditingProfileId);
         Assert.IsNull(settings.LastMatchedProfileId);
         Assert.IsNull(settings.ActiveProfileId);

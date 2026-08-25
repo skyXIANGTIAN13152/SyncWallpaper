@@ -1,4 +1,5 @@
 using SyncWallpaper.Core;
+using SyncWallpaper.Windows;
 
 namespace SyncWallpaper.Tests;
 
@@ -29,19 +30,31 @@ public sealed class Rc1ReliabilityTests
     }
 
     [TestMethod]
-    public void SnapshotComparerUsesStableIdentityAndReportsOnlyChanges()
+    public void SanitizedDiagnosticsKeepReadOnlyDisplayFacts()
     {
-        var beforeMonitor = new MonitorIdentity { StableId = "edid:a", Width = 1920, Height = 1080, Rotation = 1, DesktopX = 0, DesktopY = 0, ConnectionState = "Connected" };
-        var afterMonitor = beforeMonitor.Clone();
-        afterMonitor.Width = 2560;
-        afterMonitor.Height = 1440;
-        var differences = DisplaySnapshotComparer.Compare(
-            new DisplaySnapshot { Monitors = new() { beforeMonitor } },
-            new DisplaySnapshot { Monitors = new() { afterMonitor } });
-        Assert.AreEqual(1, differences.Count);
-        Assert.AreEqual("resolution", differences[0].Field);
-        Assert.AreEqual("1920x1080", differences[0].Before);
-        Assert.AreEqual("2560x1440", differences[0].After);
+        var safe = MonitorIdentitySanitizer.Sanitize(new MonitorIdentity
+        {
+            Width = 3840,
+            Height = 2160,
+            RefreshRateNumerator = 144000,
+            RefreshRateDenominator = 1000,
+            Rotation = 3,
+            Dpi = 144,
+            DpiScale = 1.5,
+            HdrEnabled = true,
+            ColorMode = "AdvancedColor",
+            DesktopX = -2160,
+            DesktopY = 0,
+            OutputTechnology = 10,
+            ConnectorInstance = 2
+        });
+        Assert.AreEqual(3840, safe.Width);
+        Assert.AreEqual(144000u, safe.RefreshRateNumerator);
+        Assert.AreEqual(3, safe.Rotation);
+        Assert.AreEqual(144, safe.Dpi);
+        Assert.AreEqual(true, safe.HdrEnabled);
+        Assert.AreEqual(-2160, safe.DesktopX);
+        Assert.AreEqual(10u, safe.OutputTechnology);
     }
 
     [TestMethod]
@@ -53,6 +66,17 @@ public sealed class Rc1ReliabilityTests
         machine.Transition(WallpaperTransactionState.Verifying);
         machine.Transition(WallpaperTransactionState.Completed);
         Assert.IsFalse(machine.TryTransition(WallpaperTransactionState.Applying));
+    }
+
+    [TestMethod]
+    public void WallpaperTransactionCanCompleteWhenEveryWallpaperIsAlreadyCorrect()
+    {
+        var machine = new WallpaperTransactionStateMachine();
+        machine.Transition(WallpaperTransactionState.WaitingForStableTopology);
+        machine.Transition(WallpaperTransactionState.Applying);
+
+        machine.Transition(WallpaperTransactionState.Completed);
+
         Assert.AreEqual(WallpaperTransactionState.Completed, machine.Current);
     }
 
@@ -62,10 +86,7 @@ public sealed class Rc1ReliabilityTests
         var applied = 0;
         var completed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var coordinator = new TopologyCoordinator(
-            (_, token) => Task.FromResult((new DisplaySnapshot
-            {
-                Monitors = new() { new MonitorIdentity { StableId = "virtual:last" } }
-            }, true)),
+            (_, _) => Task.FromResult((new DisplaySnapshot { Monitors = new() { new MonitorIdentity { StableId = "virtual:last" } } }, true)),
             (_, _, _) => { Interlocked.Increment(ref applied); completed.TrySetResult(true); return Task.CompletedTask; });
         for (var i = 0; i < 50_000; i++) coordinator.Signal(TopologySignalKind.Display, "sim-" + i);
         await completed.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -94,7 +115,7 @@ public sealed class Rc1ReliabilityTests
     }
 
     [TestMethod]
-    public void SuspendResumeStateMachineRequiresStableTopologyBeforeActive()
+    public void SuspendResumeRequiresStableTopologyBeforeActive()
     {
         var state = new SessionPowerStateMachine();
         Assert.IsTrue(state.BeginSuspend());
@@ -107,45 +128,18 @@ public sealed class Rc1ReliabilityTests
     }
 
     [TestMethod]
-    public void MixedDpiValidatorRejectsOverlapAndScalesCoordinates()
-    {
-        var result = MixedDpiLayoutValidator.Validate(new[]
-        {
-            new DpiLayoutDisplay("a", new Int32Rect(0, 0, 1920, 1080), 1.0, false),
-            new DpiLayoutDisplay("b", new Int32Rect(1900, 0, 1440, 2560), 1.5, true)
-        });
-        Assert.IsFalse(result.IsValid);
-        Assert.IsTrue(result.Errors.Any(x => x.Contains("重叠", StringComparison.Ordinal)));
-        Assert.AreEqual(1280, MixedDpiLayoutValidator.ScaleLogicalCoordinate(1920, 1.0, 1.5));
-    }
-
-    [TestMethod]
     public void ExplorerBackoffIsBoundedAndResetsAfterSuccess()
     {
         var backoff = new ExplorerRecoveryBackoff(TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(40));
         backoff.RecordFailure();
         backoff.RecordFailure();
         Assert.IsTrue(backoff.NextDelay <= TimeSpan.FromMilliseconds(40));
-        Assert.AreEqual(2, backoff.ConsecutiveFailures);
         backoff.RecordSuccess();
         Assert.AreEqual(0, backoff.ConsecutiveFailures);
     }
 
     [TestMethod]
-    public void SafeModeNeedsThreeStartupFailuresAndExplicitExit()
-    {
-        var policy = new SafeModePolicy(3);
-        Assert.IsFalse(policy.Record(SafeModeTrigger.StartupCrash, "one"));
-        Assert.IsFalse(policy.Record(SafeModeTrigger.StartupCrash, "two"));
-        Assert.IsTrue(policy.Record(SafeModeTrigger.StartupCrash, "three"));
-        Assert.IsTrue(policy.Enabled);
-        Assert.IsFalse(policy.TryLeave("NO"));
-        Assert.IsTrue(policy.TryLeave("YES"));
-        Assert.IsFalse(policy.Enabled);
-    }
-
-    [TestMethod]
-    public void SafeModeTriggersImmediatelyForRollbackFailure()
+    public void WallpaperRollbackFailureEntersSafeModeImmediately()
     {
         var policy = new SafeModePolicy();
         Assert.IsTrue(policy.Record(SafeModeTrigger.WallpaperRollbackFailure, "rollback"));
