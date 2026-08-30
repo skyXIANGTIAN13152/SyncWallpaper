@@ -1,9 +1,9 @@
-# 性能
+# Performance
 
-屏序是单进程、事件驱动的壁纸监测程序。显示器无变化时不轮询拓扑，也不创建任务栏、Shell、远程、在线或其他功能进程。
+SyncWallpaper is a single-process, event-driven wallpaper monitor. When displays do not change it does not poll topology and does not create taskbar, Shell, remote, online-provider or other feature processes.
 
-普通显示事件等待约 2 秒并取得两次相同快照，最长稳定等待 10 秒；重复签名不会重复应用。登录启动使用一次立即检测。
+Normal display events wait about two seconds and require two identical snapshots, with a ten-second stability limit. Duplicate signatures do not trigger another application. Sign-in uses one immediate detection.
 
-低资源模式把渲染缓存限制为 128 MiB；普通模式为 512 MiB。缓存按最近使用时间清理。主窗口隐藏后不持续重建界面，托盘图标只在状态变化时重绘。
+Low-resource mode limits the render cache to 128 MiB; normal mode allows 512 MiB. The cache is trimmed by recent use. Hidden windows do not rebuild the UI, and the tray icon is redrawn only when its state changes.
 
-性能验收记录 Working Set、Private Bytes、Handle Count、CPU 和启动时间。`SyncWallpaper.Diagnostics monitor-soak` 可以重复执行只读显示器发现并报告句柄增量；它不会更改显示器或壁纸。
+`SyncWallpaper.Diagnostics monitor-soak` repeats read-only discovery and reports handle growth, CPU and memory deltas. It never changes displays or wallpapers.

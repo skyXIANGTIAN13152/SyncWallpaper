@@ -20,7 +20,7 @@ public partial class MainWindow : Window
     private volatile bool _refreshDirty = true;
     private volatile bool _windowVisible;
     private int _refreshRequestQueued;
-    private string _libraryStatusText = "档案库已加载；在资源管理器中增删文件后请点击刷新。";
+    private string _libraryStatusText = "Library loaded; click Refresh after adding or removing files in Explorer.";
 
     public bool AllowExit { get; set; }
 
@@ -66,7 +66,7 @@ public partial class MainWindow : Window
         StatusBadge.Text = _runtime.StatusText;
         OverviewStatus.Text = _runtime.StatusText;
         MonitorCount.Text = _runtime.Monitors.Count.ToString();
-        ProfileName.Text = _runtime.LastMatch?.Profile?.Name ?? "未匹配";
+        ProfileName.Text = _runtime.LastMatch?.Profile?.Name ?? "Unmatched";
         Confidence.Text = _runtime.LastMatch is null ? "—" : $"{_runtime.LastMatch.Confidence}%";
         LastMessage.Text = _runtime.LastMessage;
         WallpaperTransactionText.Text = $"{TransactionLabel(_runtime.LastWallpaperTransaction.State)} · {_runtime.LastWallpaperTransaction.DurationMilliseconds:0} ms · {_runtime.LastWallpaperTransaction.Message}";
@@ -75,8 +75,8 @@ public partial class MainWindow : Window
         MonitorItems.ItemsSource = monitorCards;
         MonitorDetails.ItemsSource = monitorCards;
         MatchEvidence.Text = _runtime.LastMatch is null
-            ? "尚未执行组合匹配。"
-            : string.Join(Environment.NewLine, _runtime.LastMatch.Evidence.Select(x => $"• {x.Role} ← {x.Monitor}：{x.Reason}（得分 {x.Score}）"))
+            ? "No profile matching has run yet."
+            : string.Join(Environment.NewLine, _runtime.LastMatch.Evidence.Select(x => $"• {x.Role} ← {x.Monitor}: {x.Reason} (score {x.Score})"))
               + Environment.NewLine + _runtime.LastMatch.Message;
 
         LibraryItems.ItemsSource = _runtime.Library.Assets
@@ -94,8 +94,8 @@ public partial class MainWindow : Window
         ProfilesList.ItemsSource = profiles;
         ProfilesList.SelectedItem = profiles.FirstOrDefault(x => x.Id.Equals(selectedId, StringComparison.OrdinalIgnoreCase));
         ProfileStatusText.Text = profiles.Count == 0
-            ? "尚未保存壁纸组合。"
-            : $"已保存 {profiles.Count} 套组合；绿色表示当前拓扑已匹配，红色表示未匹配。";
+            ? "No wallpaper profiles saved yet."
+            : $"{profiles.Count} wallpaper profile(s) saved; green means the current topology is matched and red means unmatched.";
         if (!ProfileNameInput.IsKeyboardFocusWithin && ProfilesList.SelectedItem is ProfileItem selected)
             ProfileNameInput.Text = selected.Name;
 
@@ -108,15 +108,15 @@ public partial class MainWindow : Window
         NebulaGlowTop.Visibility = NebulaGlowBottom.Visibility = _runtime.Settings.LowPerformanceMode ? Visibility.Collapsed : Visibility.Visible;
 
         CurrentVersionText.Text = _runtime.CurrentVersion;
-        AboutVersionText.Text = "版本 " + _runtime.CurrentVersion;
+        AboutVersionText.Text = "Version " + _runtime.CurrentVersion;
         UpdateChannelCombo.SelectedIndex = string.Equals(_runtime.Settings.UpdateChannel, nameof(UpdateChannel.Beta), StringComparison.OrdinalIgnoreCase) ? 1 : 0;
         AutomaticUpdateCheck.IsChecked = _runtime.Settings.AutomaticUpdateCheckEnabled;
         LastUpdateCheckText.Text = _runtime.Settings.LastUpdateAttemptUtc is { } attempted
-            ? $"上次检查：{attempted.ToLocalTime():yyyy-MM-dd HH:mm}"
-            : "上次检查：从未检查";
+            ? $"Last check: {attempted.ToLocalTime():yyyy-MM-dd HH:mm}"
+            : "Last check: never";
         var update = _runtime.LastUpdateResult;
-        UpdateStatusText.Text = update?.UserMessage ?? "默认不联网。";
-        UpdateNotesText.Text = update?.ReleaseNotes is { Length: > 0 } notes ? "更新内容：\n" + notes : string.Empty;
+        UpdateStatusText.Text = update?.UserMessage ?? "Offline by default.";
+        UpdateNotesText.Text = update?.ReleaseNotes is { Length: > 0 } notes ? "Release notes:\n" + notes : string.Empty;
         OpenReleaseButton.IsEnabled = update?.ReleasePageUrl is { } releaseUrl
             && ReleaseUrlValidator.IsAllowed(releaseUrl, ProjectLinks.RepositorySettings);
         _refreshing = false;
@@ -125,18 +125,18 @@ public partial class MainWindow : Window
     private MonitorCard ToMonitorCard(MonitorIdentity monitor)
     {
         var binding = _runtime.GetBindingForMonitor(monitor);
-        var role = binding?.DisplayName ?? (monitor.IsInternal ? "笔记本本体" : "未分配角色");
+        var role = binding?.DisplayName ?? (monitor.IsInternal ? "Laptop" : "Unassigned role");
         var wallpaper = WallpaperName(binding);
         var refresh = monitor.RefreshRateDenominator == 0
-            ? "未知"
+            ? "Unknown"
             : $"{(double)monitor.RefreshRateNumerator / monitor.RefreshRateDenominator:0.##} Hz";
-        var displayInfo = $"{monitor.Width} × {monitor.Height}（原生 {monitor.NativeWidth} × {monitor.NativeHeight}） · {refresh} · {FormatOrientation(monitor)} · 桌面坐标 {monitor.DesktopX},{monitor.DesktopY}";
-        var colorInfo = $"DPI {monitor.Dpi}（{monitor.DpiScale * 100:0}%） · HDR {FormatHdr(monitor.HdrEnabled)} · 色彩 {Blank(monitor.ColorMode)} · {(monitor.IsPrimary ? "主显示器" : "非主显示器")} · {(monitor.IsInternal ? "内置屏幕" : "外接屏幕")}";
-        var identityInfo = $"身份来源 {monitor.StableIdSource} · 稳定身份 {Blank(monitor.StableId)}\n"
-            + $"EDID 厂商 {Blank(monitor.EdidManufactureId, monitor.ManufacturerName)} · 产品代码 {Blank(monitor.EdidProductCodeId, monitor.ProductCodeId)} · 序列号 {Blank(monitor.EdidSerialNumber)}\n"
+        var displayInfo = $"{monitor.Width} × {monitor.Height} (native {monitor.NativeWidth} × {monitor.NativeHeight}) · {refresh} · {FormatOrientation(monitor)} · desktop position {monitor.DesktopX},{monitor.DesktopY}";
+        var colorInfo = $"DPI {monitor.Dpi} ({monitor.DpiScale * 100:0}%) · HDR {FormatHdr(monitor.HdrEnabled)} · Color {Blank(monitor.ColorMode)} · {(monitor.IsPrimary ? "Primary monitor" : "Non-primary monitor")} · {(monitor.IsInternal ? "Internal display" : "External display")}";
+        var identityInfo = $"Identity source {monitor.StableIdSource} · Stable identity {Blank(monitor.StableId)}\n"
+            + $"EDID manufacturer {Blank(monitor.EdidManufactureId, monitor.ManufacturerName)} · product code {Blank(monitor.EdidProductCodeId, monitor.ProductCodeId)} · serial {Blank(monitor.EdidSerialNumber)}\n"
             + $"monitorDevicePath {Blank(monitor.MonitorDevicePath)}\n"
-            + $"InstanceName {Blank(monitor.InstanceName)} · Adapter {Blank(monitor.AdapterId)} · Source {monitor.SourceId} · Target {monitor.TargetId} · 接口 {OutputTechnologyLabel(monitor.OutputTechnology)}（{monitor.OutputTechnology}） · connectorInstance {monitor.ConnectorInstance}";
-        return new MonitorCard(role, monitor.DisplayLabel, $"{monitor.Width} × {monitor.Height} · {FormatOrientation(monitor)}", "壁纸：" + wallpaper, displayInfo, colorInfo, identityInfo);
+            + $"InstanceName {Blank(monitor.InstanceName)} · Adapter {Blank(monitor.AdapterId)} · Source {monitor.SourceId} · Target {monitor.TargetId} · Connector {OutputTechnologyLabel(monitor.OutputTechnology)} ({monitor.OutputTechnology}) · connectorInstance {monitor.ConnectorInstance}";
+        return new MonitorCard(role, monitor.DisplayLabel, $"{monitor.Width} × {monitor.Height} · {FormatOrientation(monitor)}", "Wallpaper: " + wallpaper, displayInfo, colorInfo, identityInfo);
     }
 
     private ProfileItem ToProfileItem(WallpaperProfile profile)
@@ -144,19 +144,19 @@ public partial class MainWindow : Window
         var matched = _runtime.LastMatch?.Profile?.Id.Equals(profile.Id, StringComparison.OrdinalIgnoreCase) == true
             && _runtime.LastMatch.Status is MatchStatus.Exact or MatchStatus.Compatible;
         var bindings = profile.Roles.Count == 0
-            ? "空白组合：尚未添加显示器角色"
+            ? "Blank profile: no monitor roles added"
             : string.Join(" · ", profile.Roles.Select(role => $"{role.DisplayName} → {WallpaperName(role)}"));
-        var details = $"{profile.Roles.Count} 台显示器 · 优先级 {profile.Priority} · 修改于 {profile.ModifiedAt.ToLocalTime():yyyy-MM-dd HH:mm}";
-        return new ProfileItem(profile.Id, profile.Name, bindings, details, matched ? "已匹配" : "未匹配", matched ? System.Windows.Media.Brushes.LawnGreen : System.Windows.Media.Brushes.OrangeRed);
+        var details = $"{profile.Roles.Count} monitor(s) · priority {profile.Priority} · modified {profile.ModifiedAt.ToLocalTime():yyyy-MM-dd HH:mm}";
+        return new ProfileItem(profile.Id, profile.Name, bindings, details, matched ? "Matched" : "Unmatched", matched ? System.Windows.Media.Brushes.LawnGreen : System.Windows.Media.Brushes.OrangeRed);
     }
 
     private string WallpaperName(MonitorRoleBinding? binding)
     {
-        if (binding is null) return "未配置";
+        if (binding is null) return "Not configured";
         var asset = _runtime.Library.Assets.FirstOrDefault(x => x.Id.Equals(binding.WallpaperAssetId, StringComparison.OrdinalIgnoreCase));
-        if (asset is not null) return asset.IsMissing ? $"{asset.DisplayName}（文件不存在）" : asset.DisplayName;
-        if (!string.IsNullOrWhiteSpace(binding.WallpaperPath)) return File.Exists(binding.WallpaperPath) ? Path.GetFileNameWithoutExtension(binding.WallpaperPath) : "文件不存在";
-        return "未配置";
+        if (asset is not null) return asset.IsMissing ? $"{asset.DisplayName} (file missing)" : asset.DisplayName;
+        if (!string.IsNullOrWhiteSpace(binding.WallpaperPath)) return File.Exists(binding.WallpaperPath) ? Path.GetFileNameWithoutExtension(binding.WallpaperPath) : "File missing";
+        return "Not configured";
     }
 
     private void Nav_Click(object sender, RoutedEventArgs e)
@@ -192,13 +192,13 @@ public partial class MainWindow : Window
     {
         if (_runtime.Monitors.Count == 0)
         {
-            System.Windows.MessageBox.Show("当前没有可识别的活动显示器。", "显示器识别");
+            System.Windows.MessageBox.Show("No active monitors are available for identification.", "Monitor Identification");
             return;
         }
         var marks = await _identityOverlay.ShowAsync(_runtime.Monitors, TimeSpan.FromSeconds(10));
         if (marks.Count == 0)
         {
-            System.Windows.MessageBox.Show("识别界面未能打开。", "显示器识别");
+            System.Windows.MessageBox.Show("The identification overlay could not be opened.", "Monitor Identification");
             return;
         }
         var assignments = await _roleAssignment.ShowAsync(marks);
@@ -213,20 +213,20 @@ public partial class MainWindow : Window
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "导入壁纸",
-            Filter = "支持的图片|*.jpg;*.jpeg;*.png;*.bmp|所有文件|*.*",
+            Title = "Import wallpapers",
+            Filter = "Supported images|*.jpg;*.jpeg;*.png;*.bmp|All files|*.*",
             Multiselect = true
         };
         if (dialog.ShowDialog(this) != true) return;
         try
         {
             foreach (var file in dialog.FileNames) _runtime.ImportWallpaper(file);
-            _libraryStatusText = $"导入完成：{dialog.FileNames.Length} 个文件。";
+            _libraryStatusText = $"Import complete: {dialog.FileNames.Length} file(s).";
             Refresh();
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(ex.Message, "导入壁纸", MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(ex.Message, "Import wallpapers", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -236,8 +236,8 @@ public partial class MainWindow : Window
     {
         var result = _runtime.RefreshLibrary();
         _libraryStatusText = result.MissingCount == 0 && result.RecoveredCount == 0
-            ? $"刷新完成：{_runtime.Library.Assets.Count(x => !x.IsMissing)} 个壁纸可用。"
-            : $"刷新完成：隐藏 {result.MissingCount} 个已删除文件，恢复 {result.RecoveredCount} 个文件。";
+            ? $"Refresh complete: {_runtime.Library.Assets.Count(x => !x.IsMissing)} wallpaper(s) available."
+            : $"Refresh complete: hid {result.MissingCount} deleted file(s), recovered {result.RecoveredCount} file(s).";
         Refresh();
     }
 
@@ -251,7 +251,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(ex.Message, "保存壁纸组合", MessageBoxButton.OK, MessageBoxImage.Information);
+            System.Windows.MessageBox.Show(ex.Message, "Save wallpaper profile", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -267,7 +267,7 @@ public partial class MainWindow : Window
     {
         if (ProfilesList.SelectedItem is not ProfileItem item)
         {
-            System.Windows.MessageBox.Show("请先选择要编辑的壁纸组合。", "壁纸组合");
+            System.Windows.MessageBox.Show("Select a wallpaper profile to edit first.", "Wallpaper Profiles");
             return;
         }
         var profile = _runtime.FindWallpaperProfile(item.Id);
@@ -280,11 +280,11 @@ public partial class MainWindow : Window
     {
         if (ProfilesList.SelectedItem is not ProfileItem item)
         {
-            System.Windows.MessageBox.Show("请先选择要应用的壁纸组合。", "壁纸组合");
+            System.Windows.MessageBox.Show("Select a wallpaper profile to apply first.", "Wallpaper Profiles");
             return;
         }
         if (!await _runtime.ApplyWallpaperProfileAsync(item.Id))
-            System.Windows.MessageBox.Show(_runtime.LastMessage, "壁纸组合", MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(_runtime.LastMessage, "Wallpaper Profiles", MessageBoxButton.OK, MessageBoxImage.Warning);
         Refresh();
     }
 
@@ -292,7 +292,7 @@ public partial class MainWindow : Window
     {
         if (ProfilesList.SelectedItem is not ProfileItem item)
         {
-            System.Windows.MessageBox.Show("请先选择要重命名的壁纸组合。", "壁纸组合");
+            System.Windows.MessageBox.Show("Select a wallpaper profile to rename first.", "Wallpaper Profiles");
             return;
         }
         try
@@ -302,7 +302,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(ex.Message, "重命名壁纸组合", MessageBoxButton.OK, MessageBoxImage.Information);
+            System.Windows.MessageBox.Show(ex.Message, "Rename wallpaper profile", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -310,10 +310,10 @@ public partial class MainWindow : Window
     {
         if (ProfilesList.SelectedItem is not ProfileItem item)
         {
-            System.Windows.MessageBox.Show("请先选择要删除的壁纸组合。", "壁纸组合");
+            System.Windows.MessageBox.Show("Select a wallpaper profile to delete first.", "Wallpaper Profiles");
             return;
         }
-        if (System.Windows.MessageBox.Show($"确定删除壁纸组合“{item.Name}”？\n壁纸图片不会被删除。", "删除壁纸组合", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+        if (System.Windows.MessageBox.Show($"Delete wallpaper profile \"{item.Name}\"?\nWallpaper image files will not be deleted.", "Delete wallpaper profile", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         _runtime.DeleteWallpaperProfile(item.Id);
         Refresh();
     }
@@ -330,12 +330,12 @@ public partial class MainWindow : Window
         try
         {
             var path = _runtime.ExportWallpaperDiagnostic();
-            System.Windows.MessageBox.Show("只读诊断已保存到：\n" + path, "壁纸诊断", MessageBoxButton.OK, MessageBoxImage.Information);
+            System.Windows.MessageBox.Show("Read-only diagnostics saved to:\n" + path, "Wallpaper diagnostics", MessageBoxButton.OK, MessageBoxImage.Information);
             Refresh();
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(ex.Message, "壁纸诊断", MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(ex.Message, "Wallpaper diagnostics", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -361,12 +361,12 @@ public partial class MainWindow : Window
     private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
     {
         CheckUpdatesButton.IsEnabled = false;
-        CheckUpdatesButton.Content = "检查中…";
+        CheckUpdatesButton.Content = "Checking…";
         try { await _runtime.CheckForUpdatesAsync(true); }
         finally
         {
             CheckUpdatesButton.IsEnabled = true;
-            CheckUpdatesButton.Content = "检查更新";
+            CheckUpdatesButton.Content = "Check for updates";
             Refresh();
         }
     }
@@ -375,7 +375,7 @@ public partial class MainWindow : Window
     {
         var url = _runtime.LastUpdateResult?.ReleasePageUrl;
         if (!_runtime.OpenReleasePage(url))
-            System.Windows.MessageBox.Show("Release 地址不可用。", "检查更新");
+            System.Windows.MessageBox.Show("The Release URL is unavailable.", "Update checks");
     }
 
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -394,28 +394,28 @@ public partial class MainWindow : Window
         var rotation = monitor.Rotation is >= 1 and <= 4 ? monitor.Rotation : 1;
         return rotation switch
         {
-            1 => "横向 · 未翻转",
-            2 => "纵向 · 未翻转",
-            3 => "横向 · 已翻转",
-            4 => "纵向 · 已翻转",
-            _ => "横向 · 未翻转"
+            1 => "Landscape · Normal",
+            2 => "Portrait · Normal",
+            3 => "Landscape · Flipped",
+            4 => "Portrait · Flipped",
+            _ => "Landscape · Normal"
         };
     }
 
-    private static string FormatHdr(bool? value) => value switch { true => "已启用", false => "未启用", _ => "不可用" };
-    private static string Blank(params string?[] values) => values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? "不可用";
+    private static string FormatHdr(bool? value) => value switch { true => "Enabled", false => "Disabled", _ => "Unavailable" };
+    private static string Blank(params string?[] values) => values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? "Unavailable";
     private static string FormatBytes(long value) => value >= 1024 * 1024 ? $"{value / 1024d / 1024d:0.##} MB" : $"{value / 1024d:0} KB";
     private static string TransactionLabel(WallpaperTransactionState value) => value switch
     {
-        WallpaperTransactionState.Completed => "已完成",
-        WallpaperTransactionState.Failed => "失败",
-        WallpaperTransactionState.Cancelled => "已取消",
-        WallpaperTransactionState.RollbackFailed => "回滚失败",
-        WallpaperTransactionState.RollingBack => "正在回滚",
-        WallpaperTransactionState.Applying => "正在应用",
-        WallpaperTransactionState.Verifying => "正在验证",
-        WallpaperTransactionState.Retrying => "正在重试",
-        _ => "准备中"
+        WallpaperTransactionState.Completed => "Completed",
+        WallpaperTransactionState.Failed => "Failed",
+        WallpaperTransactionState.Cancelled => "Cancelled",
+        WallpaperTransactionState.RollbackFailed => "Rollback failed",
+        WallpaperTransactionState.RollingBack => "Rolling back",
+        WallpaperTransactionState.Applying => "Applying",
+        WallpaperTransactionState.Verifying => "Verifying",
+        WallpaperTransactionState.Retrying => "Retrying",
+        _ => "Preparing"
     };
 
     private static string OutputTechnologyLabel(uint value) => value switch
@@ -425,13 +425,13 @@ public partial class MainWindow : Window
         5 => "HDMI",
         6 => "LVDS",
         10 => "DisplayPort",
-        11 => "内置 DisplayPort/eDP",
+        11 => "Internal DisplayPort/eDP",
         15 => "Miracast",
-        16 => "间接有线（常见 USB-C/扩展坞）",
-        17 => "间接虚拟",
-        0x80000000 => "内部接口",
-        0xFFFFFFFF => "其他",
-        _ => "其他"
+        16 => "Indirect wired (common USB-C/dock)",
+        17 => "Indirect virtual",
+        0x80000000 => "Internal connector",
+        0xFFFFFFFF => "Other",
+        _ => "Other"
     };
 
     private sealed record MonitorCard(string Role, string Name, string Geometry, string Wallpaper, string DisplayInfo, string ColorInfo, string IdentityInfo);

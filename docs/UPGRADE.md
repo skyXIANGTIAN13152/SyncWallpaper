@@ -1,11 +1,11 @@
-# 升级
+# Upgrade
 
-屏序只检查 GitHub Release，不自动下载、关闭程序、替换文件、运行安装器或回滚版本。
+SyncWallpaper only checks GitHub Releases. It does not download, close, replace, install or roll back versions automatically.
 
-1. 从官方 Release 下载并校验 ZIP。
-2. 从托盘退出屏序。
-3. 只替换程序目录 `App` 和 `Diagnostics`。
-4. 保留 `Config`、`Wallpapers`、`Cache`、`Thumbnails` 和 `Logs`。
-5. 启动新版本，确认设置页显示正确数据目录和开机自启状态。
+1. Download the desired ZIP from the official Release and verify its SHA-256 hash.
+2. Exit SyncWallpaper from the tray.
+3. Replace only the `App` and `Diagnostics` folders.
+4. Keep `Config`, `Wallpapers`, `Cache`, `Thumbnails` and `Logs`.
+5. Start the new version and confirm the Settings page shows the expected data folder and startup state.
 
-`upgrade.ps1` 使用同一安装脚本覆盖程序文件，不会删除运行数据。项目不创建更新 staging、更新备份或配置历史恢复点。
+`upgrade.ps1` performs an in-place program replacement through the same installer logic and preserves runtime data. No update staging, update backup or configuration history is created.

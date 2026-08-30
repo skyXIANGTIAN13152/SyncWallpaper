@@ -61,7 +61,7 @@ public sealed class ConfigurationStore
             _faultInjector.ThrowIfRequested(FaultPoint.ConfigurationWrite);
             Paths.Ensure();
             var json = JsonSerializer.Serialize(value, _options);
-            if (Encoding.UTF8.GetByteCount(json) > MaxConfigurationBytes) throw new InvalidDataException("配置文件超过 10 MiB 安全上限。");
+            if (Encoding.UTF8.GetByteCount(json) > MaxConfigurationBytes) throw new InvalidDataException("Configuration file exceeds the 10 MiB safety limit.");
             File.WriteAllText(temp, json);
             using (var stream = new FileStream(temp, FileMode.Open, FileAccess.Read, FileShare.Read)) stream.Flush(true);
             ReplaceAtomically(temp, path);
@@ -84,7 +84,7 @@ public sealed class ConfigurationStore
     private static void ValidateFileName(string fileName)
     {
         if (string.IsNullOrWhiteSpace(fileName) || !string.Equals(Path.GetFileName(fileName), fileName, StringComparison.Ordinal) || fileName.Contains("..", StringComparison.Ordinal))
-            throw new ArgumentException("配置文件名必须是当前配置目录中的简单文件名。", nameof(fileName));
+            throw new ArgumentException("Configuration file names must be simple file names within the current configuration folder.", nameof(fileName));
     }
 }
 

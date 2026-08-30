@@ -34,7 +34,7 @@ public partial class App : System.Windows.Application
         {
             Icon = TrayIconRenderer.Create(_trayState.Value),
             Visible = true,
-            Text = "屏序 SyncWallpaper"
+            Text = "SyncWallpaper"
         };
         _tray.DoubleClick += (_, _) => ShowMainWindow();
         _tray.ContextMenuStrip = BuildTrayMenu();
@@ -46,34 +46,34 @@ public partial class App : System.Windows.Application
     private ContextMenuStrip BuildTrayMenu()
     {
         var menu = new ContextMenuStrip();
-        menu.Items.Add("打开屏序", null, (_, _) => ShowMainWindow());
-        menu.Items.Add("重新检测显示器", null, async (_, _) => await (_runtime?.DetectAsync() ?? Task.CompletedTask));
-        menu.Items.Add("重新应用已匹配壁纸", null, async (_, _) => await (_runtime?.ReapplyAsync() ?? Task.CompletedTask));
+        menu.Items.Add("Open SyncWallpaper", null, (_, _) => ShowMainWindow());
+        menu.Items.Add("Detect monitors", null, async (_, _) => await (_runtime?.DetectAsync() ?? Task.CompletedTask));
+        menu.Items.Add("Reapply matched wallpapers", null, async (_, _) => await (_runtime?.ReapplyAsync() ?? Task.CompletedTask));
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("启用自动匹配", null, (_, _) => _runtime?.SetAutoMatch(true));
-        menu.Items.Add("暂停自动切换", null, (_, _) => _runtime?.SetAutoMatch(false));
+        menu.Items.Add("Enable automatic matching", null, (_, _) => _runtime?.SetAutoMatch(true));
+        menu.Items.Add("Pause automatic switching", null, (_, _) => _runtime?.SetAutoMatch(false));
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("检查更新", null, async (_, _) =>
+        menu.Items.Add("Check for updates", null, async (_, _) =>
         {
             if (_runtime is null) return;
             var result = await _runtime.CheckForUpdatesAsync(true);
             if (result.Status == UpdateCheckStatus.UpdateAvailable)
             {
                 ShowMainWindow();
-                _tray?.ShowBalloonTip(2500, "屏序 SyncWallpaper", result.UserMessage ?? "发现新版本", ToolTipIcon.Info);
+                _tray?.ShowBalloonTip(2500, "SyncWallpaper", result.UserMessage ?? "New version available", ToolTipIcon.Info);
             }
             else if (result.Status == UpdateCheckStatus.UpToDate)
-                _tray?.ShowBalloonTip(1800, "屏序 SyncWallpaper", "当前已是最新版本。", ToolTipIcon.Info);
+                _tray?.ShowBalloonTip(1800, "SyncWallpaper", "You are up to date.", ToolTipIcon.Info);
             else
-                _tray?.ShowBalloonTip(2200, "屏序 SyncWallpaper", result.UserMessage ?? "暂时无法检查更新。", ToolTipIcon.Warning);
+                _tray?.ShowBalloonTip(2200, "SyncWallpaper", result.UserMessage ?? "Unable to check for updates right now.", ToolTipIcon.Warning);
         });
-        menu.Items.Add("查看 GitHub 项目", null, (_, _) =>
+        menu.Items.Add("Open GitHub repository", null, (_, _) =>
         {
             if (_runtime is null || !_runtime.OpenReleasePage(ProjectLinks.Releases))
-                _tray?.ShowBalloonTip(2200, "屏序 SyncWallpaper", "尚未配置 GitHub 仓库地址。", ToolTipIcon.Info);
+                _tray?.ShowBalloonTip(2200, "SyncWallpaper", "The GitHub repository URL is not configured.", ToolTipIcon.Info);
         });
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("退出", null, (_, _) => ShutdownFromTray());
+        menu.Items.Add("Exit", null, (_, _) => ShutdownFromTray());
         return menu;
     }
 
@@ -105,7 +105,7 @@ public partial class App : System.Windows.Application
             previous?.Dispose();
             _trayState = state;
         }
-        _tray.Text = $"屏序 SyncWallpaper · {_runtime.StatusText}";
+        _tray.Text = $"SyncWallpaper · {_runtime.StatusText}";
     }
 
     private void ShutdownFromTray()

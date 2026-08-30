@@ -32,7 +32,7 @@ public static class WallpaperProfileEditingService
         var now = DateTime.UtcNow;
         return new WallpaperProfile
         {
-            Name = string.IsNullOrWhiteSpace(name) ? $"空白组合 {now.ToLocalTime():MM-dd HHmm}" : name.Trim(),
+            Name = string.IsNullOrWhiteSpace(name) ? $"Blank profile {now.ToLocalTime():MM-dd HHmm}" : name.Trim(),
             Combination = DisplayCombinationKind.Custom,
             CreatedAt = now,
             ModifiedAt = now,
@@ -50,9 +50,9 @@ public static class WallpaperProfileEditingService
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(draft);
         var name = draft.Name?.Trim();
-        if (string.IsNullOrWhiteSpace(name)) throw new InvalidOperationException("组合名称不能为空。");
+        if (string.IsNullOrWhiteSpace(name)) throw new InvalidOperationException("Profile name cannot be empty.");
         draft.Roles ??= new List<WallpaperRoleEditDraft>();
-        if (draft.Roles.Count > 8) throw new InvalidOperationException("一套组合最多支持 8 个逻辑角色。");
+        if (draft.Roles.Count > 8) throw new InvalidOperationException("A profile supports at most 8 logical roles.");
 
         var roleNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var monitorKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -60,13 +60,13 @@ public static class WallpaperProfileEditingService
         foreach (var item in draft.Roles)
         {
             var roleName = item.Role?.Trim();
-            if (string.IsNullOrWhiteSpace(roleName)) throw new InvalidOperationException("每个显示器都需要逻辑角色名称。");
-            if (!roleNames.Add(roleName)) throw new InvalidOperationException($"逻辑角色“{roleName}”重复。");
-            if (item.Fingerprint is null) throw new InvalidOperationException($"逻辑角色“{roleName}”尚未选择显示器。");
+            if (string.IsNullOrWhiteSpace(roleName)) throw new InvalidOperationException("Every monitor needs a logical role name.");
+            if (!roleNames.Add(roleName)) throw new InvalidOperationException($"Logical role \"{roleName}\" is duplicated.");
+            if (item.Fingerprint is null) throw new InvalidOperationException($"Logical role \"{roleName}\" has no monitor selected.");
             var monitorKey = StrongMonitorKey(item.Fingerprint);
             if (string.IsNullOrWhiteSpace(monitorKey))
-                throw new InvalidOperationException($"逻辑角色“{roleName}”的显示器缺少可靠硬件身份。");
-            if (!monitorKeys.Add(monitorKey)) throw new InvalidOperationException("同一台显示器不能重复分配给多个逻辑角色。");
+                throw new InvalidOperationException($"The monitor for logical role \"{roleName}\" lacks reliable hardware identity.");
+            if (!monitorKeys.Add(monitorKey)) throw new InvalidOperationException("A monitor cannot be assigned to multiple logical roles.");
 
             roles.Add(new MonitorRoleBinding
             {
@@ -79,7 +79,7 @@ public static class WallpaperProfileEditingService
                 FitMode = item.FitMode,
                 BackgroundColor = string.IsNullOrWhiteSpace(item.BackgroundColor) ? "#050B18" : item.BackgroundColor,
                 LastKnownMonitorDevicePath = item.Fingerprint.MonitorDevicePath,
-                Notes = "用户在组合编辑器中配置"
+                Notes = "Configured by the profile editor"
             });
         }
 

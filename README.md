@@ -1,74 +1,62 @@
-# 屏序 SyncWallpaper
+# SyncWallpaper
 
-屏序是一款专注于 Windows 多显示器壁纸的开源桌面程序。它识别当前连接的物理显示器和布局，匹配用户保存的壁纸组合，并在开机、插拔显示器、睡眠唤醒或 Explorer 恢复后自动还原每块屏幕的壁纸。
+SyncWallpaper is an open-source Windows application dedicated to wallpapers for multi-monitor desktops. It discovers the physical monitors and topology currently connected, matches a saved wallpaper profile, and restores each monitor's wallpaper after sign-in, hot-plug events, sleep/wake, or Explorer recovery.
 
-当前版本：`1.1.0-beta.1`。软件只做多显示器壁纸，不提供副屏任务栏、窗口管理、音频切换、屏保、远程控制、在线壁纸或显示参数修改。
+This English release is `1.1.0-beta.1-en`. The product is wallpaper-only: it does not provide a secondary taskbar, window management, audio switching, screen saver, remote control, online wallpaper provider, or display-setting changes.
 
-## 核心能力
+## Features
 
-- 使用 `QueryDisplayConfig` 和 `DisplayConfigGetDeviceInfo` 读取所有活动显示路径。
-- 使用 WMI `WmiMonitorID` 补充显示器厂商、产品代码、序列号、实例名和友好名称。
-- 完整保留只读显示信息：monitorDevicePath、EDID 厂商/产品/序列号、adapter/source/target、接口类型、connectorInstance、分辨率、原生分辨率、刷新率、DPI/缩放、HDR/色彩、方向/翻转、桌面坐标、主屏和内置屏状态。
-- 上述信息只用于识别、展示和匹配。屏序不会修改分辨率、刷新率、HDR、DPI、方向或 Windows 显示布局。
-- 分层身份匹配：厂商 + 产品代码 + EDID 序列号 → monitorDevicePath → WMI InstanceName → 显卡/target/接口/connectorInstance → 几何辅助证据。
-- 两台同型号显示器仍无法唯一确认时不自动猜测；A/B/C 识别界面让用户把物理屏幕绑定到 Laptop、Landscape、Portrait 或自定义逻辑角色。
-- 壁纸档案库把导入图片托管到 `Wallpapers`，刷新后会隐藏已经从磁盘删除的条目，并在文件恢复后重新显示。
-- 壁纸组合可新建空白档案、编辑、命名、重命名、删除、手动应用；同一显示器拓扑可保存多套壁纸方案。
-- 显示器组合变化后自动重新匹配。匹配成功时自动应用，不会把“手动应用”误写成当前匹配组合。
-- 通过 `IDesktopWallpaper` 逐显示器设置并回读验证；失败有限重试，歧义、缺失图片或弱身份证据会保持原壁纸。
-- 开机自启使用当前用户 Run 项，仅管理屏序自身；关闭主窗口后保留轻量托盘监测。
-- Explorer 重启、锁定/解锁、睡眠/唤醒和 HDMI/DP/USB-C 拓扑变化采用事件驱动防抖，不进行高频轮询。
-- 设置页提供低资源模式；渲染缓存有容量上限和清理策略。
-- 更新检查默认不联网；用户手动检查或主动开启每周检查时，只读取官方 GitHub Releases 页面，不自动下载或安装。
+- Enumerates active display paths with `QueryDisplayConfig` and `DisplayConfigGetDeviceInfo`.
+- Supplements identity with WMI `WmiMonitorID` (manufacturer, product code, serial, instance name and friendly name).
+- Preserves read-only display information: monitor device path, EDID fields, adapter/source/target, connector type and instance, resolution, native resolution, refresh rate, DPI/scale, HDR/color, orientation/flip, desktop coordinates, primary status and internal/external status.
+- Uses layered identity matching: manufacturer + product code + EDID serial, monitor device path, WMI instance name, adapter/target/connector topology, then geometry as supporting evidence.
+- Never guesses when identical displays cannot be distinguished safely. A/B/C overlays let the user bind physical displays to Laptop, Landscape, Portrait or custom roles.
+- Imports and manages JPG/JPEG/PNG/BMP wallpapers. Refresh hides deleted files and restores entries when the original file returns.
+- Supports named wallpaper profiles: create blank, edit, rename, delete and manually apply. Multiple profiles can describe the same monitor topology.
+- Re-matches after every stable topology change and applies the matching profile automatically. Manual application never changes the selected profile or profile metadata.
+- Applies wallpapers per monitor through `IDesktopWallpaper`, then reads them back for verification. Ambiguous matches, missing assets and weak identity evidence leave the existing wallpapers unchanged.
+- Optional current-user startup, low-resource rendering cache, read-only diagnostics and user-initiated GitHub Release checks.
 
-## 界面范围
+## User interface
 
-主程序只保留七个页面：
+The main window contains seven pages:
 
-1. 概览
-2. 显示器识别
-3. 壁纸档案库
-4. 壁纸组合
-5. 运行记录
-6. 设置
-7. 关于
+1. Overview
+2. Monitor Identification
+3. Wallpaper Library
+4. Wallpaper Profiles
+5. Activity Log
+6. Settings
+7. About
 
-复杂“观测之眼”只用于程序内部视觉；Windows 任务栏和托盘使用显示器拓扑图标。
+The complex observing-eye artwork is used only inside the application. Windows taskbar and tray assets use the monitor-topology icon so they remain legible at 16–24 pixels.
 
-## 安全匹配原则
+## Matching and safety
 
-Windows 的显示器编号 1、2、3 不是永久身份，重新插拔后可能变化，因此不会写入壁纸组合。序列号优先于接口；没有序列号的相同型号显示器如果交换接口，将要求重新确认，而不是把壁纸猜到错误屏幕。
+Windows display numbers such as `\\.\DISPLAY1` are temporary session labels, not permanent identities. Profile matching uses physical identity first and geometry last. A profile is marked **Matched** only when the current topology has one unique assignment, reliable identity evidence and a complete wallpaper binding for every role. It is marked **Unmatched** when the topology, identity, role assignment or wallpaper is incomplete or ambiguous.
 
-档案状态只显示：
+Resolution, refresh rate, HDR, DPI, orientation and coordinates are retained for identification and explanation only. SyncWallpaper does not call `SetDisplayConfig` or `ChangeDisplaySettingsEx` and never changes Windows display settings.
 
-- `已匹配`：当前物理拓扑与档案唯一对应，具备完整壁纸绑定。
-- `未匹配`：屏幕数量、身份、角色或壁纸不完整，或者存在歧义。
+## Data layout
 
-详细规则见 [显示器身份](docs/MONITOR-IDENTITY.md) 和 [组合匹配](docs/PROFILE-MATCHING.md)。
-
-## 数据目录
-
-正式安装在 `D:\屏序 SyncWallpaper` 时，所有运行数据也位于该目录：
+The formal D: deployment keeps runtime data beside the application:
 
 ```text
-D:\屏序 SyncWallpaper\
-├─ App\                       程序
-├─ Diagnostics\               只读诊断工具
-├─ Config\
-│  ├─ settings.json            设置
-│  ├─ profiles.json            壁纸组合
-│  └─ library.json             壁纸档案索引
-├─ Wallpapers\                托管壁纸原图
-├─ Cache\Rendered\            每显示器渲染缓存
-├─ Thumbnails\                缩略图
-└─ Logs\                      本地日志
+<SyncWallpaper folder>/
+├─ App/                    application files
+├─ Diagnostics/            read-only diagnostic tool
+├─ Config/                 settings, profiles and wallpaper index
+├─ Wallpapers/             managed wallpaper originals
+├─ Cache/Rendered/         per-monitor render cache
+├─ Thumbnails/             thumbnail cache
+└─ Logs/                   local diagnostic logs
 ```
 
-程序不创建配置回滚历史或壁纸回收备份。配置保存使用同目录临时文件原子替换；成功后临时文件消失。若程序所在目录不可写，才回退到 `%LocalAppData%\SyncWallpaper`。也可设置环境变量 `SYNCWALLPAPER_DATA_ROOT` 指定数据目录。
+No configuration history, deleted-wallpaper backup or update staging is created. Configuration writes use an atomic temporary-file replacement. If the application directory is not writable, storage falls back to `%LocalAppData%\SyncWallpaper`; `SYNCWALLPAPER_DATA_ROOT` can override the location.
 
-## 构建与测试
+## Build and test
 
-需要 Windows 10/11 和 .NET 8 SDK：
+Requires Windows 10/11 and the .NET 8 SDK:
 
 ```powershell
 .\build.ps1
@@ -77,18 +65,18 @@ D:\屏序 SyncWallpaper\
 .\publish-selfcontained.ps1
 ```
 
-解决方案只包含壁纸相关项目：Core、Windows、App、Diagnostics、Update.Core 及其测试。当前自动测试共 80 项，覆盖身份分层、同型号歧义、拓扑稳定、组合编辑/匹配、壁纸事务、档案库刷新、启动恢复、图标状态、更新检查，以及真实 Windows 只读显示器枚举和句柄稳定性。
+The solution contains only wallpaper-related projects: Core, Windows, App, Diagnostics, Update.Core and their tests. The automated suite covers identity matching, identical-display ambiguity, topology stabilization, profile editing, wallpaper transactions, library refresh, startup recovery, tray states and update checks.
 
-发布输出：
+Published executables are:
 
 ```text
 artifacts\publish\win-x64\App\SyncWallpaper.App.exe
 artifacts\publish\win-x64\Diagnostics\SyncWallpaper.Diagnostics.exe
 ```
 
-发布 ZIP 不包含用户配置、壁纸、日志、密钥、开发机绝对路径、额外宿主进程或自动安装器。
+Release ZIPs contain the license, documentation and installation scripts, but no user configuration, wallpapers, logs, credentials, developer paths, extra host processes or updater.
 
-## 只读诊断
+## Read-only diagnostics
 
 ```powershell
 SyncWallpaper.Diagnostics.exe snapshot
@@ -96,32 +84,33 @@ SyncWallpaper.Diagnostics.exe wallpaper-snapshot
 SyncWallpaper.Diagnostics.exe monitor-soak --iterations 1000
 ```
 
-诊断只读取显示器、当前壁纸和自身资源，不修改 Windows 显示设置或壁纸。
+Diagnostics read monitor state, current wallpaper paths and their own resource usage. They do not change display settings or wallpapers.
 
-## 文档
+## Documentation
 
-- [架构](docs/ARCHITECTURE.md)
-- [中文使用指南](docs/USER-GUIDE.zh-CN.md)
-- [English user guide](docs/USER-GUIDE.en.md)
-- [显示器身份](docs/MONITOR-IDENTITY.md)
-- [组合匹配](docs/PROFILE-MATCHING.md)
-- [壁纸事务](docs/WALLPAPER-TRANSACTION.md)
-- [真实硬件检查清单](docs/REAL-HARDWARE-TEST-CHECKLIST.md)
-- [故障排查](docs/TROUBLESHOOTING.md)
-- [隐私](docs/PRIVACY.md)
-- [安全](docs/SECURITY.md)
-- [性能](docs/PERFORMANCE.md)
-- [安装与升级](docs/INSTALLATION.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [User guide](docs/USER-GUIDE.en.md)
+- [Monitor identity](docs/MONITOR-IDENTITY.md)
+- [Profile matching](docs/PROFILE-MATCHING.md)
+- [Wallpaper transactions](docs/WALLPAPER-TRANSACTION.md)
+- [Hardware test checklist](docs/REAL-HARDWARE-TEST-CHECKLIST.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Privacy](docs/PRIVACY.md)
+- [Security](docs/SECURITY.md)
+- [Performance](docs/PERFORMANCE.md)
+- [Installation](docs/INSTALLATION.md)
 
-## 开源与更新
+## Open source and updates
 
-许可证见 [LICENSE](LICENSE)。公开仓库：[skyXIANGTIAN13152/SyncWallpaper](https://github.com/skyXIANGTIAN13152/SyncWallpaper)。
+Licensed under [LICENSE](LICENSE). Source repository: [skyXIANGTIAN13152/SyncWallpaper](https://github.com/skyXIANGTIAN13152/SyncWallpaper).
 
-程序不会自动下载、替换或启动更新文件。发现新版本后只打开经过白名单校验的 GitHub Release 页面，由用户决定是否安装。
+Update checks are disabled by default. When requested by the user, the application reads the official GitHub Releases API and opens a validated Release page. It never downloads, replaces or executes update assets.
 
-## 已知限制
+## Known limitations
 
-- 仅支持 Windows 10/11。
-- `IDesktopWallpaper` 的桌面位置模式为全局设置，屏序通过按目标尺寸预渲染降低多屏比例差异。
-- 某些显示器或转接器不提供可靠 EDID 序列号；同型号设备仍有歧义时必须手动确认。
-- Windows 10、真实睡眠唤醒、Explorer 强制重启和更多混合 DPI 硬件组合仍需持续验证。
+- Windows 10/11 only.
+- EDID, WMI, Container ID and connector fields depend on the monitor, adapter and graphics driver.
+- Identical displays without reliable serials may require A/B/C confirmation again.
+- `IDesktopWallpaper` positioning is a global Windows setting; SyncWallpaper pre-renders at target dimensions to reduce aspect-ratio differences.
+- Span is best effort and should be validated on the target Windows build and layout.
+- The application is unsigned; Windows SmartScreen may show a first-run warning.

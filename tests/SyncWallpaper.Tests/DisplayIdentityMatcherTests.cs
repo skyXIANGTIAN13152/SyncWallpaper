@@ -29,7 +29,7 @@ public class DisplayIdentityMatcherTests
 
         Assert.AreEqual(DisplayIdentityMatchStatus.Unknown, result.Status);
         Assert.IsFalse(result.CanAutoApply);
-        CollectionAssert.Contains(result.ConflictingFields.ToArray(), "EDID 序列号");
+        CollectionAssert.Contains(result.ConflictingFields.ToArray(), "EDID serial");
     }
 
     [TestMethod]

@@ -138,15 +138,15 @@ public sealed class DisplayRoleAssignmentService
     private static Task<IReadOnlyList<ManualDisplayAssignment>> ShowCore(IReadOnlyList<DisplayIdentificationMark> marks, CancellationToken cancellationToken)
     {
         var tcs = new TaskCompletionSource<IReadOnlyList<ManualDisplayAssignment>>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var window = new Window { Title = "屏序 · 确认逻辑角色与壁纸", Width = 900, Height = 600, MinWidth = 760, MinHeight = 460, WindowStartupLocation = WindowStartupLocation.CenterScreen,
+        var window = new Window { Title = "SyncWallpaper · Confirm monitor roles and wallpapers", Width = 900, Height = 600, MinWidth = 760, MinHeight = 460, WindowStartupLocation = WindowStartupLocation.CenterScreen,
             Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(7, 13, 27)), Foreground = WpfBrushes.White, Topmost = true };
         var root = new DockPanel { Margin = new Thickness(20), LastChildFill = false };
-        var heading = new TextBlock { Text = "同型号或无序列号显示器需要手动确认", FontSize = 20, Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(54, 232, 255)), Margin = new Thickness(0, 0, 0, 14) };
+        var heading = new TextBlock { Text = "Identical or serial-less monitors require manual confirmation", FontSize = 20, Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(54, 232, 255)), Margin = new Thickness(0, 0, 0, 14) };
         DockPanel.SetDock(heading, Dock.Top); root.Children.Add(heading);
         var rows = new List<(DisplayIdentificationMark Mark, WpfComboBox Role, WpfTextBox Path)>();
         var grid = new Grid(); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(250) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 360 });
-        AddHeader(grid, 0, 0, "屏幕"); AddHeader(grid, 0, 1, "稳定身份"); AddHeader(grid, 0, 2, "逻辑角色"); AddHeader(grid, 0, 3, "壁纸路径");
+        AddHeader(grid, 0, 0, "Monitor"); AddHeader(grid, 0, 1, "Stable identity"); AddHeader(grid, 0, 2, "Logical role"); AddHeader(grid, 0, 3, "Wallpaper path");
         var inputForeground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(10, 25, 42));
         var inputBackground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(250, 253, 255));
         var comboItemStyle = new Style(typeof(System.Windows.Controls.ComboBoxItem));
@@ -181,7 +181,7 @@ public sealed class DisplayRoleAssignmentService
                 FontSize = 14,
                 ItemContainerStyle = comboItemStyle,
                 ItemTemplate = comboTemplate,
-                ToolTip = "选择逻辑角色"
+                ToolTip = "Select a logical role"
             };
             role.Resources[System.Windows.SystemColors.ControlTextBrushKey] = inputForeground;
             role.Resources[System.Windows.SystemColors.WindowTextBrushKey] = inputForeground;
@@ -192,20 +192,20 @@ public sealed class DisplayRoleAssignmentService
                 Foreground = inputForeground, Background = inputBackground,
                 BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(94, 137, 170)),
                 CaretBrush = inputForeground,
-                ToolTip = "选择或输入壁纸文件路径"
+                ToolTip = "Select or enter a wallpaper file path"
             };
-            var browse = new System.Windows.Controls.Button { Content = "选择…", Margin = new Thickness(4), Padding = new Thickness(10, 5, 10, 5), Foreground = WpfBrushes.White, Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(20, 65, 98)) };
-            browse.Click += (_, _) => { var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "图片|*.jpg;*.jpeg;*.png;*.bmp" }; if (dialog.ShowDialog() == true) path.Text = dialog.FileName; };
+            var browse = new System.Windows.Controls.Button { Content = "Browse…", Margin = new Thickness(4), Padding = new Thickness(10, 5, 10, 5), Foreground = WpfBrushes.White, Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(20, 65, 98)) };
+            browse.Click += (_, _) => { var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Images|*.jpg;*.jpeg;*.png;*.bmp" }; if (dialog.ShowDialog() == true) path.Text = dialog.FileName; };
             var pathPanel = new StackPanel { Orientation = WpfOrientation.Horizontal }; pathPanel.Children.Add(path); pathPanel.Children.Add(browse);
             AddCell(grid, i + 1, 0, new TextBlock { Text = mark.Label, FontSize = 20, Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(54, 232, 255)), Margin = new Thickness(4) });
-            AddCell(grid, i + 1, 1, new TextBlock { Text = string.IsNullOrWhiteSpace(mark.StableId) ? "（无稳定 ID）" : MonitorIdentitySanitizer.Redact(mark.StableId), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(4), Foreground = WpfBrushes.LightGray, ToolTip = "稳定身份已脱敏" });
+            AddCell(grid, i + 1, 1, new TextBlock { Text = string.IsNullOrWhiteSpace(mark.StableId) ? "(no stable ID)" : MonitorIdentitySanitizer.Redact(mark.StableId), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(4), Foreground = WpfBrushes.LightGray, ToolTip = "Stable identity is redacted" });
             AddCell(grid, i + 1, 2, role); AddCell(grid, i + 1, 3, pathPanel); rows.Add((mark, role, path));
         }
         var content = new ScrollViewer { Content = grid, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         DockPanel.SetDock(content, Dock.Top); root.Children.Add(content);
         var buttons = new StackPanel { Orientation = WpfOrientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 16, 0, 0) };
-        var save = new System.Windows.Controls.Button { Content = "保存绑定", Padding = new Thickness(18, 8, 18, 8), Margin = new Thickness(6) };
-        var cancel = new System.Windows.Controls.Button { Content = "取消", Padding = new Thickness(18, 8, 18, 8), Margin = new Thickness(6) };
+        var save = new System.Windows.Controls.Button { Content = "Save bindings", Padding = new Thickness(18, 8, 18, 8), Margin = new Thickness(6) };
+        var cancel = new System.Windows.Controls.Button { Content = "Cancel", Padding = new Thickness(18, 8, 18, 8), Margin = new Thickness(6) };
         buttons.Children.Add(cancel); buttons.Children.Add(save); DockPanel.SetDock(buttons, Dock.Bottom); root.Children.Add(buttons); window.Content = root;
         var finished = false;
         void Finish(IReadOnlyList<ManualDisplayAssignment> value) { if (finished) return; finished = true; tcs.TrySetResult(value); if (window.IsVisible) window.Close(); }

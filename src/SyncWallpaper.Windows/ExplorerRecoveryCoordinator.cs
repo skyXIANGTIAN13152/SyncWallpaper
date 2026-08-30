@@ -41,14 +41,14 @@ public sealed class ExplorerRecoveryCoordinator : IDisposable
             State = ExplorerRecoveryState.Unavailable;
             LastError = reason;
             var now = DateTime.UtcNow;
-            if (now - _lastNoticeUtc > TimeSpan.FromSeconds(5)) { _log("Explorer 暂不可用：" + reason); _lastNoticeUtc = now; }
+            if (now - _lastNoticeUtc > TimeSpan.FromSeconds(5)) { _log("Explorer is temporarily unavailable: " + reason); _lastNoticeUtc = now; }
             ScheduleLocked();
         }
     }
 
     public void NotifyShellEvent(string reason)
     {
-        if (string.Equals(reason, "TaskbarCreated", StringComparison.OrdinalIgnoreCase)) NotifyUnavailable("收到 TaskbarCreated，等待 Explorer 恢复");
+        if (string.Equals(reason, "TaskbarCreated", StringComparison.OrdinalIgnoreCase)) NotifyUnavailable("TaskbarCreated received; waiting for Explorer recovery");
     }
 
     private void ScheduleLocked()
@@ -84,7 +84,7 @@ public sealed class ExplorerRecoveryCoordinator : IDisposable
         {
             _backoff.RecordFailure();
             lock (_gate) { State = ExplorerRecoveryState.Faulted; LastError = ex.Message; ScheduleLocked(); }
-            _log("Explorer 被动恢复失败：" + ex.Message);
+            _log("Passive Explorer recovery failed: " + ex.Message);
         }
         finally { lock (_gate) _running = false; }
     }

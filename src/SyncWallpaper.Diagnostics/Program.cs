@@ -25,17 +25,17 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine("诊断失败：" + ex.Message);
+            Console.Error.WriteLine("Diagnostics failed: " + ex.Message);
             return 1;
         }
     }
 
     private static int Help()
     {
-        Console.WriteLine("SyncWallpaper.Diagnostics（只读）");
-        Console.WriteLine("  snapshot                         导出显示器身份、模式和资源快照");
-        Console.WriteLine("  wallpaper-snapshot               导出 Explorer 当前壁纸路径与哈希");
-        Console.WriteLine("  monitor-soak --iterations 1000  重复只读检测并检查句柄增长");
+        Console.WriteLine("SyncWallpaper.Diagnostics (read-only)");
+        Console.WriteLine("  snapshot                         Export monitor identity, mode and resource snapshot");
+        Console.WriteLine("  wallpaper-snapshot               Export current Explorer wallpaper paths and hashes");
+        Console.WriteLine("  monitor-soak --iterations 1000  Repeat read-only discovery and check handle growth");
         return 0;
     }
 
@@ -66,7 +66,7 @@ internal static class Program
         };
         var path = ResolveOutput(args, "display-snapshot");
         await File.WriteAllTextAsync(path, JsonSerializer.Serialize(payload, JsonOptions));
-        Console.WriteLine($"显示器只读快照已写入：{path}；显示器={monitors.Count}");
+        Console.WriteLine($"Read-only monitor snapshot written to {path}; monitors={monitors.Count}");
         return 0;
     }
 
@@ -75,7 +75,7 @@ internal static class Program
         var snapshot = new WallpaperSnapshotService().Capture();
         var path = ResolveOutput(args, "wallpaper-snapshot");
         await File.WriteAllTextAsync(path, JsonSerializer.Serialize(snapshot, JsonOptions));
-        Console.WriteLine($"壁纸只读快照已写入：{path}；活动显示器={snapshot.ActiveMonitorCount}；错误={snapshot.Error ?? "无"}");
+        Console.WriteLine($"Read-only wallpaper snapshot written to {path}; active monitors={snapshot.ActiveMonitorCount}; error={snapshot.Error ?? "none"}");
         return snapshot.Error is null ? 0 : 1;
     }
 
@@ -107,7 +107,7 @@ internal static class Program
         };
         var path = ResolveOutput(args, "monitor-soak");
         await File.WriteAllTextAsync(path, JsonSerializer.Serialize(payload, JsonOptions));
-        Console.WriteLine($"显示器只读压力测试完成：{iterations} 次，句柄增量={payload.handleDelta}，报告={path}");
+        Console.WriteLine($"Read-only monitor soak completed: {iterations} iterations, handle delta={payload.handleDelta}, report={path}");
         return payload.handleDelta < 100 ? 0 : 1;
     }
 

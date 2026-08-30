@@ -1,25 +1,25 @@
-# 故障排查
+# Troubleshooting
 
-## 开机后组合已匹配但壁纸未应用
+## A matched profile did not apply after sign-in
 
-确认设置中的“自动匹配”已开启，并查看运行记录中的 `Match` 与 `Wallpaper`。1.1 版本会在登录启动时立即检测并发起事务，不再等待下一次显示事件。可从托盘点击“重新应用已匹配壁纸”复验。
+Ensure automatic matching is enabled and inspect `Match` and `Wallpaper` entries in Activity Log. The 1.1 startup path detects immediately and starts a transaction without waiting for another display event. Use **Reapply matched wallpapers** from the tray or Overview to verify again.
 
-## 显示“未匹配”
+## The profile is Unmatched
 
-检查屏幕数量、每个角色的壁纸、文件是否存在和身份来源。同型号且无可靠序列号时这是安全行为，请打开“显示器识别”完成 A/B/C 确认。
+Check monitor count, every role's wallpaper, file existence and the identity source. Identical displays without reliable serials require the Monitor Identification page and A/B/C confirmation.
 
-## 壁纸显示“文件不存在”
+## A wallpaper says File missing
 
-打开壁纸档案库并点击刷新。若文件被从 `Wallpapers` 删除，请重新导入并在组合编辑器重新选择；屏序不会用黑色或随机图片替代缺失文件。
+Open Wallpaper Library and click **Refresh library**. If a file was removed from `Wallpapers`, import it again and select it in the profile editor. SyncWallpaper never substitutes a black or random image for a missing file.
 
-## 插拔后没有立即变化
+## Nothing changes immediately after hot-plug
 
-屏序通常等待约 2 秒并读取两次相同拓扑，避免 Windows 在 HDMI/DP/USB-C 枚举过程中应用到错误屏幕。可点击“重新检测显示器”。
+SyncWallpaper waits about two seconds and reads two identical topology snapshots so Windows can finish enumerating HDMI/DP/USB-C paths. Use **Detect monitors** for an immediate read.
 
-## Explorer 暂时不可用
+## Explorer is temporarily unavailable
 
-程序会有限退避重试并保持当前壁纸。Explorer 恢复后会重新检测；持续失败时查看 `Logs`。
+The application performs bounded backoff retries and keeps the current wallpapers. It detects again after Explorer recovers; inspect `Logs` if the issue persists.
 
-## 配置损坏
+## Configuration is damaged
 
-屏序不会维护历史备份。退出程序后检查 `Config\settings.json`、`profiles.json` 和 `library.json`；无法解析的文件可移出目录后重新启动，再从现有 `Wallpapers` 重新建立档案。
+SyncWallpaper does not keep historical backups. Exit the application, inspect `Config\settings.json`, `profiles.json` and `library.json`, and move an unreadable file out of the folder before restarting. Existing files in `Wallpapers` can then be imported again.

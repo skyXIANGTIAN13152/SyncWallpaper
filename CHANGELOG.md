@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0-beta.1-en — English release
+
+- Published the complete English UI, tray menu, diagnostics output and documentation for the wallpaper-only edition.
+- Kept the same monitor identity, topology matching, named-profile and per-monitor wallpaper transaction behavior as the Chinese release.
+- This tag is a parallel release; the `main` branch and the Chinese `v1.1.0-beta.1` release are unchanged.
+
 ## 1.1.0-beta.1 — 2026-08-25
 
 - Refocused SyncWallpaper exclusively on multi-monitor wallpaper identification, profiles, matching and recovery.

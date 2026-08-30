@@ -24,7 +24,7 @@ public static class ProfileSchemaMigrator
                 profile.AutoApply = true;
                 profile.MinimumConfidence = profile.AllowCompatibleMatch ? 60 : 80;
                 profile.SchemaVersion = 2;
-                log?.Invoke($"壁纸 Profile 已从旧版本迁移：{profile.Name}");
+                log?.Invoke($"Wallpaper profile migrated from an older schema: {profile.Name}");
             }
 
             if (profile.ExpectedMonitorCount <= 0) profile.ExpectedMonitorCount = profile.Roles.Count;
@@ -64,10 +64,10 @@ public static class ProfileSchemaMigrator
                 // even after all monitor and wallpaper fields were completed.
                 // Repair that stale state; incomplete profiles remain safe.
                 profile.AutoApply = WallpaperProfileApplyPolicy.IsComplete(profile);
-                log?.Invoke($"壁纸 Profile 自动应用规则已修复：{profile.Name}");
+                log?.Invoke($"Wallpaper profile automatic-apply rule repaired: {profile.Name}");
             }
             if (profile.SchemaVersion < CurrentSchemaVersion)
-                log?.Invoke($"壁纸 Profile 身份规则已升级：{profile.Name}");
+                log?.Invoke($"Wallpaper profile identity rules upgraded: {profile.Name}");
             profile.SchemaVersion = Math.Max(profile.SchemaVersion, CurrentSchemaVersion);
         }
         document.SchemaVersion = Math.Max(document.SchemaVersion, CurrentSchemaVersion);

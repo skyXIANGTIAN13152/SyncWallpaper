@@ -40,7 +40,7 @@ public sealed class DisplayIdentityMatcher
     {
         ArgumentNullException.ThrowIfNull(expected);
         if (candidates is null || candidates.Count == 0)
-            return new() { Status = DisplayIdentityMatchStatus.Unknown, Basis = "没有当前显示器候选", Reasons = new[] { "候选列表为空" } };
+            return new() { Status = DisplayIdentityMatchStatus.Unknown, Basis = "No current monitor candidate", Reasons = new[] { "Candidate list is empty" } };
 
         var evaluations = candidates.Select(candidate => (Monitor: candidate, Evaluation: Evaluate(expected, candidate)))
             .OrderByDescending(x => x.Evaluation.Score).ToArray();
@@ -59,7 +59,7 @@ public sealed class DisplayIdentityMatcher
                 Score = result.Score,
                 CanAutoApply = false,
                 Basis = result.Basis,
-                Reasons = result.Reasons.Concat(new[] { "多个候选具有相同最高匹配分数" }).ToArray(),
+                Reasons = result.Reasons.Concat(new[] { "Multiple candidates share the highest match score" }).ToArray(),
                 ConflictingFields = result.ConflictingFields,
                 TiedCandidates = tied
             };
@@ -95,45 +95,45 @@ public sealed class DisplayIdentityMatcher
         {
             var stableEvidence = actual.StableIdSource switch
             {
-                MonitorIdentitySource.EdidSerial => new Evaluation(DisplayIdentityMatchStatus.ExactMatch, 1200, "StableId / EDID", new[] { "EDID 稳定 ID 一致" }, conflicts),
-                MonitorIdentitySource.MonitorDevicePath => new Evaluation(DisplayIdentityMatchStatus.StrongMatch, 900, "StableId / monitorDevicePath", new[] { "monitorDevicePath 稳定 ID 一致" }, conflicts),
-                MonitorIdentitySource.InstanceName => new Evaluation(DisplayIdentityMatchStatus.StrongMatch, 820, "StableId / InstanceName", new[] { "InstanceName 稳定 ID 一致" }, conflicts),
-                MonitorIdentitySource.HardwareTopology => new Evaluation(DisplayIdentityMatchStatus.StrongMatch, 760, "StableId / 硬件拓扑", new[] { "硬件拓扑稳定 ID 一致" }, conflicts),
+                MonitorIdentitySource.EdidSerial => new Evaluation(DisplayIdentityMatchStatus.ExactMatch, 1200, "StableId / EDID", new[] { "EDID stable ID matches" }, conflicts),
+                MonitorIdentitySource.MonitorDevicePath => new Evaluation(DisplayIdentityMatchStatus.StrongMatch, 900, "StableId / monitorDevicePath", new[] { "monitorDevicePath stable ID matches" }, conflicts),
+                MonitorIdentitySource.InstanceName => new Evaluation(DisplayIdentityMatchStatus.StrongMatch, 820, "StableId / InstanceName", new[] { "InstanceName stable ID matches" }, conflicts),
+                MonitorIdentitySource.HardwareTopology => new Evaluation(DisplayIdentityMatchStatus.StrongMatch, 760, "StableId / hardware topology", new[] { "Hardware topology stable ID matches" }, conflicts),
                 MonitorIdentitySource.ContainerId when MonitorIdentityBuilder.IsUsableContainerId(actual.ContainerId)
-                    => new Evaluation(DisplayIdentityMatchStatus.ProbableMatch, 600, "StableId / Container ID", new[] { "Container ID 一致，但不能单独自动应用" }, conflicts),
-                MonitorIdentitySource.Geometry => new Evaluation(DisplayIdentityMatchStatus.ProbableMatch, 120, "StableId / 几何", new[] { "仅几何稳定 ID 一致，不能单独自动应用" }, conflicts),
+                    => new Evaluation(DisplayIdentityMatchStatus.ProbableMatch, 600, "StableId / Container ID", new[] { "Container ID matches but cannot trigger automatic application alone" }, conflicts),
+                MonitorIdentitySource.Geometry => new Evaluation(DisplayIdentityMatchStatus.ProbableMatch, 120, "StableId / geometry", new[] { "Only geometric stable ID matches; automatic application is not allowed" }, conflicts),
                 _ => null
             };
             if (stableEvidence is not null) return stableEvidence;
         }
 
         if (expected.HasUsableSerial && actual.HasUsableSerial && string.Equals(expected.SerialKey, actual.SerialKey, StringComparison.OrdinalIgnoreCase))
-            return new(DisplayIdentityMatchStatus.ExactMatch, 1200, "厂商 + 产品代码 + EDID 序列号", new[] { "EDID 序列号一致" }, conflicts);
+            return new(DisplayIdentityMatchStatus.ExactMatch, 1200, "Manufacturer + product code + EDID serial", new[] { "EDID serial matches" }, conflicts);
 
         if (HasPermanentPath(expected) && string.Equals(expected.MonitorDevicePath, actual.MonitorDevicePath, StringComparison.OrdinalIgnoreCase))
-            return new(DisplayIdentityMatchStatus.StrongMatch, 900, "monitorDevicePath", new[] { "monitorDevicePath 一致" }, conflicts);
+            return new(DisplayIdentityMatchStatus.StrongMatch, 900, "monitorDevicePath", new[] { "monitorDevicePath matches" }, conflicts);
 
         if (SameNonEmpty(expected.InstanceName, actual.InstanceName))
-            return new(DisplayIdentityMatchStatus.StrongMatch, 820, "WmiMonitorID InstanceName", new[] { "InstanceName 一致" }, conflicts);
+            return new(DisplayIdentityMatchStatus.StrongMatch, 820, "WmiMonitorID InstanceName", new[] { "InstanceName matches" }, conflicts);
 
         if (SameHardware(expected, actual))
-            return new(DisplayIdentityMatchStatus.StrongMatch, 760, "Adapter LUID + Target ID + 接口", new[] { "显卡适配器、Target ID、接口类型和 connectorInstance 一致" }, conflicts);
+            return new(DisplayIdentityMatchStatus.StrongMatch, 760, "Adapter LUID + Target ID + connector", new[] { "Adapter, Target ID, connector type and connectorInstance match" }, conflicts);
 
         if (MonitorIdentityBuilder.IsUsableContainerId(expected.ContainerId)
             && MonitorIdentityBuilder.IsUsableContainerId(actual.ContainerId)
             && SameNonEmpty(expected.ContainerId, actual.ContainerId))
-            return new(DisplayIdentityMatchStatus.ProbableMatch, 600, "Container ID", new[] { "Container ID 一致，但缺少更高等级身份依据" }, conflicts);
+            return new(DisplayIdentityMatchStatus.ProbableMatch, 600, "Container ID", new[] { "Container ID matches but stronger identity evidence is missing" }, conflicts);
 
         if (SameModel(expected, actual) && SameConnection(expected, actual) && SameGeometry(expected, actual))
-            return new(DisplayIdentityMatchStatus.ProbableMatch, 520, "厂商 + 产品代码 + 接口 + 几何", new[] { "型号、接口、分辨率、方向和桌面位置一致" }, conflicts);
+            return new(DisplayIdentityMatchStatus.ProbableMatch, 520, "Manufacturer + product code + connector + geometry", new[] { "Model, connector, resolution, orientation and desktop position match" }, conflicts);
 
         if (SameModel(expected, actual) && SameGeometry(expected, actual))
-            return new(DisplayIdentityMatchStatus.ProbableMatch, 360, "厂商 + 产品代码 + 几何", new[] { "型号和几何信息一致" }, conflicts);
+            return new(DisplayIdentityMatchStatus.ProbableMatch, 360, "Manufacturer + product code + geometry", new[] { "Model and geometry match" }, conflicts);
 
         if (SameGeometry(expected, actual))
-            return new(DisplayIdentityMatchStatus.ProbableMatch, 120, "分辨率 + 方向 + 桌面位置", new[] { "仅几何信息一致，不能单独安全应用" }, conflicts);
+            return new(DisplayIdentityMatchStatus.ProbableMatch, 120, "Resolution + orientation + desktop position", new[] { "Only geometry matches; this is not safe for automatic application alone" }, conflicts);
 
-        return new(DisplayIdentityMatchStatus.Unknown, 0, string.Empty, reasons.Count == 0 ? new[] { "没有可靠身份依据" } : reasons, conflicts);
+        return new(DisplayIdentityMatchStatus.Unknown, 0, string.Empty, reasons.Count == 0 ? new[] { "No reliable identity evidence" } : reasons, conflicts);
     }
 
     private static bool SameNonEmpty(string left, string right) => !string.IsNullOrWhiteSpace(left)
@@ -164,15 +164,15 @@ public sealed class DisplayIdentityMatcher
     private static IReadOnlyList<string> FindConflicts(MonitorIdentity expected, MonitorIdentity actual)
     {
         var conflicts = new List<string>();
-        if (expected.HasUsableSerial && actual.HasUsableSerial && !string.Equals(expected.SerialKey, actual.SerialKey, StringComparison.OrdinalIgnoreCase)) conflicts.Add("EDID 序列号");
+        if (expected.HasUsableSerial && actual.HasUsableSerial && !string.Equals(expected.SerialKey, actual.SerialKey, StringComparison.OrdinalIgnoreCase)) conflicts.Add("EDID serial");
         if (MonitorIdentityBuilder.IsUsableContainerId(expected.ContainerId)
             && MonitorIdentityBuilder.IsUsableContainerId(actual.ContainerId)
             && !SameNonEmpty(expected.ContainerId, actual.ContainerId)) conflicts.Add("Container ID");
         if (HasPermanentPath(expected) && HasPermanentPath(actual) && !string.Equals(expected.MonitorDevicePath, actual.MonitorDevicePath, StringComparison.OrdinalIgnoreCase)) conflicts.Add("monitorDevicePath");
         if (!string.IsNullOrWhiteSpace(expected.InstanceName) && !string.IsNullOrWhiteSpace(actual.InstanceName) && !SameNonEmpty(expected.InstanceName, actual.InstanceName)) conflicts.Add("InstanceName");
-        if (expected.Width > 0 && actual.Width > 0 && expected.Width != actual.Width) conflicts.Add("分辨率宽度");
-        if (expected.Height > 0 && actual.Height > 0 && expected.Height != actual.Height) conflicts.Add("分辨率高度");
-        if (expected.Rotation > 0 && actual.Rotation > 0 && expected.Rotation != actual.Rotation) conflicts.Add("旋转方向");
+        if (expected.Width > 0 && actual.Width > 0 && expected.Width != actual.Width) conflicts.Add("Resolution width");
+        if (expected.Height > 0 && actual.Height > 0 && expected.Height != actual.Height) conflicts.Add("Resolution height");
+        if (expected.Rotation > 0 && actual.Rotation > 0 && expected.Rotation != actual.Rotation) conflicts.Add("Orientation");
         return conflicts;
     }
 

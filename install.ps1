@@ -8,8 +8,8 @@ $ErrorActionPreference = "Stop"
 $package = [IO.Path]::GetFullPath($PackagePath)
 $target = [IO.Path]::GetFullPath($InstallRoot)
 $allowedRoot = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA "Programs"))
-if (-not $target.StartsWith($allowedRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw "安装目录必须位于当前用户 LocalAppData\Programs 下。" }
-if (-not (Test-Path (Join-Path $package "App\SyncWallpaper.App.exe"))) { throw "找不到发布包中的 App\SyncWallpaper.App.exe。" }
+if (-not $target.StartsWith($allowedRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw "The install directory must be under the current user's LocalAppData\Programs folder." }
+if (-not (Test-Path (Join-Path $package "App\SyncWallpaper.App.exe"))) { throw "App\SyncWallpaper.App.exe was not found in the release package." }
 New-Item -ItemType Directory -Force -Path $target | Out-Null
 # This is a user-invoked installer only. The product never invokes this script.
 # Configuration and wallpapers live outside the program directory and are not touched.
@@ -25,8 +25,8 @@ if ($CreateShortcuts) {
     $start = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
     New-Item -ItemType Directory -Force -Path $start | Out-Null
     foreach ($link in @(
-        @{ Path = (Join-Path $desktop "屏序 SyncWallpaper.lnk"); Description = "屏序 SyncWallpaper" },
-        @{ Path = (Join-Path $start "屏序 SyncWallpaper.lnk"); Description = "屏序 SyncWallpaper" }
+        @{ Path = (Join-Path $desktop "SyncWallpaper.lnk"); Description = "SyncWallpaper" },
+        @{ Path = (Join-Path $start "SyncWallpaper.lnk"); Description = "SyncWallpaper" }
     )) {
         $shortcut = $shell.CreateShortcut($link.Path)
         $shortcut.TargetPath = Join-Path $target "App\SyncWallpaper.App.exe"
@@ -36,4 +36,4 @@ if ($CreateShortcuts) {
         $shortcut.Save()
     }
 }
-Write-Host "已安装到 $target；不会修改 Windows 显示参数或电源。是否开机自启由 -StartWithWindows 选择。"
+Write-Host "Installed to $target. Windows display and power settings were not changed. Startup is controlled by -StartWithWindows."

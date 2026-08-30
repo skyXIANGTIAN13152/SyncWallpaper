@@ -1,28 +1,28 @@
 ---
 name: Bug report
-about: 报告可复现的问题
+about: Report a reproducible problem
 title: "[Bug] "
 labels: bug
 assignees: ''
 ---
 
-## 问题描述
+## Description
 
-请清晰描述实际行为和预期行为。
+Describe the actual and expected behavior clearly.
 
-## 环境
+## Environment
 
-- Windows 版本：
-- 屏序版本：
-- 显示器数量/方向（不要粘贴 EDID、序列号或完整设备路径）：
-- 运行模式：轻量 / 标准 / 完整 / 自定义
+- Windows version:
+- SyncWallpaper version:
+- Monitor count/orientation (do not paste EDID, serials or complete device paths):
+- Runtime mode: low-resource / normal
 
-## 复现步骤
+## Reproduction steps
 
 1.
 2.
 3.
 
-## 日志与隐私
+## Logs and privacy
 
-请先移除用户名、设备路径、序列号、壁纸路径和其他个人信息，再附上最小必要日志。不要上传 `Config`、`Wallpapers` 或完整诊断目录。
+Remove usernames, device paths, serials, wallpaper paths and other personal information before attaching the smallest useful log. Do not upload `Config`, `Wallpapers` or a complete diagnostics directory.

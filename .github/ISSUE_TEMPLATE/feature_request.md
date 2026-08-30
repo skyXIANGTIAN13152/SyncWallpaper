@@ -1,19 +1,19 @@
 ---
 name: Feature request
-about: 提议新功能或改进
+about: Suggest a feature or improvement
 title: "[Feature] "
 labels: enhancement
 assignees: ''
 ---
 
-## 需求
+## Request
 
-你希望解决什么问题？
+What problem would you like to solve?
 
-## 建议方案
+## Proposed solution
 
-描述期望的行为、UI 或配置方式。
+Describe the desired behavior, UI or configuration.
 
-## 影响与验证
+## Impact and verification
 
-说明对轻量模式、性能、隐私和 Windows 10/11 兼容性的影响。
+Explain the impact on low-resource mode, performance, privacy and Windows 10/11 compatibility.

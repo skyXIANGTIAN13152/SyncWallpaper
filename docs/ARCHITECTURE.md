@@ -1,45 +1,41 @@
-# 壁纸专版架构
+# Architecture
 
-屏序只有一个常驻主进程 `SyncWallpaper.App.exe`。它负责单实例、托盘、配置、日志、显示器变化协调、壁纸档案、组合匹配和壁纸事务。产品不再包含模块管理器或任何额外功能宿主进程。
+SyncWallpaper is a single resident process, `SyncWallpaper.App.exe`. It owns the tray, configuration, logs, monitor discovery, topology coordination, wallpaper profiles, matching and wallpaper transactions.
 
 ```text
-Windows 显示/设备/电源/Explorer 事件
+Windows display/device/power/Explorer events
                     │
                     ▼
          DisplayChangeCoordinator
-          两次稳定快照 + 最新事件优先
+          two stable snapshots + newest event wins
                     │
           ┌─────────┴─────────┐
           ▼                   ▼
  MonitorDiscoveryService   ProfileMatcher
- QueryDisplayConfig/WMI    唯一身份与角色分配
+ QueryDisplayConfig/WMI    unique identity and roles
           │                   │
           └─────────┬─────────┘
                     ▼
           WallpaperApplyService
-          渲染 → 应用 → 回读验证
+          render → apply → read-back verify
 ```
 
-## 项目边界
+## Project boundaries
 
-- `SyncWallpaper.Core`：纯数据模型、身份与组合匹配、拓扑稳定、配置原子保存和壁纸事务状态。
-- `SyncWallpaper.Windows`：只读显示器发现、Windows 消息、WMI、Explorer 恢复、壁纸库/渲染/应用、启动项和日志。
-- `SyncWallpaper.App`：WPF 主界面、托盘和壁纸专用运行时。
-- `SyncWallpaper.Diagnostics`：只读显示器/壁纸快照与检测压力测试。
-- `SyncWallpaper.Update.Core`：仅检查 GitHub Release，不下载或安装。
+- `SyncWallpaper.Core`: data models, identity/profile matching, topology stabilization, atomic configuration writes and transaction state.
+- `SyncWallpaper.Windows`: read-only monitor discovery, Windows messages, WMI, Explorer recovery, wallpaper library/render/apply, startup and logging.
+- `SyncWallpaper.App`: WPF window, tray and wallpaper-focused runtime.
+- `SyncWallpaper.Diagnostics`: read-only monitor/wallpaper snapshots and soak tests.
+- `SyncWallpaper.Update.Core`: GitHub Release checks only; no download or install.
 
-## 显示 API 边界
+## Display API boundary
 
-分辨率、刷新率、DPI、HDR、方向、桌面坐标和接口信息均保留，因为它们是显示器识别和故障解释的重要证据。它们只从 Windows 读取；解决方案中没有 `SetDisplayConfig`、`ChangeDisplaySettingsEx` 或显示参数写入服务。
+Resolution, refresh rate, DPI, HDR, orientation, desktop coordinates and connector data are retained because they explain identity and matching. They are read only. The solution contains no `SetDisplayConfig`, `ChangeDisplaySettingsEx` or display-setting write service.
 
-## 事件与并发
+## Events and concurrency
 
-`WM_DISPLAYCHANGE`、`WM_DEVICECHANGE`、`WM_POWERBROADCAST`、`WM_DPICHANGED`、`WM_SETTINGCHANGE`、`TaskbarCreated` 和 `SystemEvents` 会进入同一个协调器。普通变化先等待 2 秒并取得两次相同快照；新事件会取消旧事务。登录启动使用一次立即检测，使已经连接的匹配组合无需等待下一次插拔事件就能应用。
+`WM_DISPLAYCHANGE`, `WM_DEVICECHANGE`, `WM_POWERBROADCAST`, `WM_DPICHANGED`, `WM_SETTINGCHANGE`, `TaskbarCreated` and `SystemEvents` feed one coordinator. Normal changes wait about two seconds and require two identical snapshots; a newer event cancels older work. Sign-in performs an immediate detection so a saved topology is applied without waiting for another hot-plug event.
 
-## 数据
+## Data and failure isolation
 
-运行数据只包括 `Config`、`Wallpapers`、`Cache`、`Thumbnails` 和 `Logs`。配置使用临时文件写完并刷新磁盘后原子替换，不生成历史恢复点或壁纸删除备份。
-
-## 故障隔离
-
-发现、匹配和应用均为有界操作。歧义、弱身份、缺失图片或 Explorer 暂时不可用时保持当前壁纸；回读失败会尝试恢复本次事务开始前的壁纸。UI 或更新检查异常不会改变组合档案。
+Runtime data is limited to `Config`, `Wallpapers`, `Cache`, `Thumbnails` and `Logs`. Configuration is written to a temporary file, flushed and atomically replaced. No history or deleted-wallpaper backup is created. Ambiguous identity, weak evidence, missing files or temporary Explorer failures keep the current wallpapers; read-back failures attempt an in-memory rollback of the current transaction.

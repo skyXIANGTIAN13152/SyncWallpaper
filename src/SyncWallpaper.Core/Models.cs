@@ -74,7 +74,7 @@ public sealed class MonitorRoleBinding
     public int SchemaVersion { get; set; } = 4;
     public string RoleId { get; set; } = Guid.NewGuid().ToString("N");
     public string Role { get; set; } = "Laptop";
-    public string DisplayName { get; set; } = "笔记本本体";
+    public string DisplayName { get; set; } = "Laptop";
     public MonitorIdentity Fingerprint { get; set; } = new();
     public string WallpaperAssetId { get; set; } = string.Empty;
     public string WallpaperPath { get; set; } = string.Empty;

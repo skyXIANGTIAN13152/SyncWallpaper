@@ -16,8 +16,8 @@ public class WallpaperLibraryRefreshTests
             var managedPath = Path.Combine(store.Paths.Wallpapers, "wp-present.jpg");
             File.WriteAllBytes(managedPath, new byte[] { 1, 2, 3 });
             var document = new LibraryDocument();
-            document.Assets.Add(new WallpaperAsset { Id = "present", DisplayName = "存在", ManagedRelativePath = "Wallpapers/wp-present.jpg" });
-            document.Assets.Add(new WallpaperAsset { Id = "missing", DisplayName = "缺失", ManagedRelativePath = "Wallpapers/wp-missing.jpg" });
+            document.Assets.Add(new WallpaperAsset { Id = "present", DisplayName = "Present", ManagedRelativePath = "Wallpapers/wp-present.jpg" });
+            document.Assets.Add(new WallpaperAsset { Id = "missing", DisplayName = "Missing", ManagedRelativePath = "Wallpapers/wp-missing.jpg" });
             store.Save("library.json", document);
 
             var service = new WallpaperLibraryService(store);

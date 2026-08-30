@@ -1,15 +1,15 @@
-# 壁纸事务
+# Wallpaper transactions
 
-屏序通过 Windows `IDesktopWallpaper` 为每块活动显示器设置静态壁纸。事务开始时读取当前壁纸快照，随后按目标屏幕尺寸渲染、设置并回读验证。
+SyncWallpaper uses Windows `IDesktopWallpaper` to set a static wallpaper on each active monitor. A transaction first captures the current wallpaper paths, then renders at each target size, applies the result and reads the paths back for verification.
 
-支持 JPG/JPEG/PNG/BMP，以及 Fill、Fit、Stretch、Center、Tile 和 Span。缓存键包含原图哈希、目标尺寸、填充方式、背景色和渲染版本，并受容量上限约束。
+Supported formats are JPG/JPEG/PNG/BMP. Fit modes are Fill, Fit, Stretch, Center, Tile and Span. Cache keys include the source hash, target size, fit mode, background color and renderer version, with a bounded capacity.
 
-规则：
+Rules:
 
-- Ambiguous、Unknown、弱证据或配置不完整时不写入。
-- 缺失图片和不属于当前活动路径的目标保持原壁纸。
-- 已经是目标路径时不重复设置。
-- Explorer COM 暂不可用时进行有限重试。
-- 任一已写入屏幕回读失败时，按逆序恢复本次事务快照。
-- 不把黑色纯色或不存在的备用图片当成兜底。
-- 事务快照只存在于内存，不生成磁盘回滚备份。
+- Ambiguous, unknown, weak-evidence or incomplete matches do not write anything.
+- Missing files and targets not present in the active paths keep their current wallpaper.
+- A target that already has the requested path is not set again.
+- Temporary Explorer COM failures receive bounded retries.
+- If read-back fails after a write, the transaction restores its in-memory pre-transaction snapshot in reverse order.
+- A black fill or random image is never used as a missing-file substitute.
+- Transaction snapshots exist only in memory; no disk rollback backup is generated.

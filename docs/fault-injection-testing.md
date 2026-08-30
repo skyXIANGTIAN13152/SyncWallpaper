@@ -1,5 +1,5 @@
-# 故障注入测试
+# Fault-injection testing
 
-生产环境使用 `NoFaultInjector`，不会主动制造错误。测试使用 `ConfigurableFaultInjector` 验证配置写入失败、配置损坏、日志不可写、壁纸事务失败/回滚失败和取消行为。
+Production uses `NoFaultInjector` and never creates faults intentionally. Tests use `ConfigurableFaultInjector` to verify configuration-write failures, malformed configuration, unwritable logs, wallpaper transaction failures, rollback failures and cancellation.
 
-故障注入只存在于自动测试，不会修改真实显示模式、音频、窗口、任务栏或 Explorer。壁纸失败测试验证事务状态机进入明确终态，并确保歧义或不完整组合无法自动应用。
+Fault injection exists only in automated tests. It never changes real display modes, audio, windows, taskbar or Explorer. Wallpaper failure tests verify a clear terminal transaction state and ensure ambiguous or incomplete profiles cannot be applied automatically.

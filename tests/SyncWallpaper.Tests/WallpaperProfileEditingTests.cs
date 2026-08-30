@@ -12,7 +12,7 @@ public sealed class WallpaperProfileEditingTests
         Assert.IsFalse(profile.AutoApply);
         Assert.AreEqual(0, profile.ExpectedMonitorCount);
         Assert.AreEqual(0, profile.Roles.Count);
-        StringAssert.StartsWith(profile.Name, "空白组合");
+        StringAssert.StartsWith(profile.Name, "Blank profile");
     }
 
     [TestMethod]
@@ -41,10 +41,10 @@ public sealed class WallpaperProfileEditingTests
         var monitor = TestData.Monitor();
         var profile = WallpaperProfileEditingService.CreateBlank("test", 100);
         var duplicateRole = Draft(Role("Laptop", monitor), Role("Laptop", TestData.Monitor("PATH-B", "SERIAL-B")));
-        StringAssert.Contains(Assert.ThrowsException<InvalidOperationException>(() => WallpaperProfileEditingService.Apply(profile, duplicateRole)).Message, "重复");
+        StringAssert.Contains(Assert.ThrowsException<InvalidOperationException>(() => WallpaperProfileEditingService.Apply(profile, duplicateRole)).Message, "duplicated");
 
         var duplicateMonitor = Draft(Role("Laptop", monitor), Role("Portrait", monitor));
-        StringAssert.Contains(Assert.ThrowsException<InvalidOperationException>(() => WallpaperProfileEditingService.Apply(profile, duplicateMonitor)).Message, "同一台显示器");
+        StringAssert.Contains(Assert.ThrowsException<InvalidOperationException>(() => WallpaperProfileEditingService.Apply(profile, duplicateMonitor)).Message, "cannot be assigned");
     }
 
     [TestMethod]
@@ -97,7 +97,7 @@ public sealed class WallpaperProfileEditingTests
         var monitor = new MonitorIdentity { Width = 1920, Height = 1080, StableId = "geometry:test", StableIdSource = MonitorIdentitySource.Geometry };
         var profile = WallpaperProfileEditingService.CreateBlank("test", 100);
         var error = Assert.ThrowsException<InvalidOperationException>(() => WallpaperProfileEditingService.Apply(profile, Draft(Role("Custom", monitor))));
-        StringAssert.Contains(error.Message, "可靠硬件身份");
+        StringAssert.Contains(error.Message, "reliable hardware identity");
     }
 
     private static WallpaperProfileEditDraft Draft(params WallpaperRoleEditDraft[] roles)

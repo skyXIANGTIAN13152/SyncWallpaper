@@ -40,9 +40,9 @@ public sealed class GitHubReleaseChecker : IReleaseUpdateChecker
     {
         var started = DateTimeOffset.UtcNow;
         if (!_repository.IsConfigured)
-            return Result(UpdateCheckStatus.InvalidResponse, null, null, "尚未配置 GitHub 仓库地址。", "ProjectLinks.GitHubOwner/GitHubRepository 为空。", started);
+            return Result(UpdateCheckStatus.InvalidResponse, null, null, "The GitHub repository URL is not configured.", "ProjectLinks.GitHubOwner/GitHubRepository is empty.", started);
         if (!SemanticVersion.TryParse(_currentVersionText, out var current))
-            return Result(UpdateCheckStatus.InvalidResponse, null, null, "当前版本号无效。", "无法解析程序集版本。", started);
+            return Result(UpdateCheckStatus.InvalidResponse, null, null, "The current version is invalid.", "The assembly version could not be parsed.", started);
 
         try
         {
@@ -55,33 +55,33 @@ public sealed class GitHubReleaseChecker : IReleaseUpdateChecker
             request.Headers.UserAgent.ParseAdd($"SyncWallpaper/{_currentVersionText}");
             using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeoutSource.Token).ConfigureAwait(false);
             if (response.StatusCode == HttpStatusCode.NotFound)
-                return Result(UpdateCheckStatus.NotFound, current, null, "暂时无法检查更新，请稍后重试。", "GitHub 返回 404。", started);
+                return Result(UpdateCheckStatus.NotFound, current, null, "Unable to check for updates right now. Try again later.", "GitHub returned 404.", started);
             if (response.StatusCode == HttpStatusCode.Forbidden)
             {
                 var rateLimited = response.Headers.TryGetValues("X-RateLimit-Remaining", out var values)
                     && values.FirstOrDefault() == "0";
                 return Result(rateLimited ? UpdateCheckStatus.RateLimited : UpdateCheckStatus.Failed, current, null,
-                    "暂时无法检查更新，请稍后重试。", rateLimited ? "GitHub API 已限流。" : "GitHub 返回 403。", started);
+                    "Unable to check for updates right now. Try again later.", rateLimited ? "GitHub API rate limit reached." : "GitHub returned 403.", started);
             }
             if (!response.IsSuccessStatusCode)
-                return Result(UpdateCheckStatus.Failed, current, null, "暂时无法检查更新，请稍后重试。", $"GitHub HTTP {(int)response.StatusCode}。", started);
+                return Result(UpdateCheckStatus.Failed, current, null, "Unable to check for updates right now. Try again later.", $"GitHub HTTP {(int)response.StatusCode}.", started);
 
             var json = await ReadLimitedAsync(response, 2 * 1024 * 1024, timeoutSource.Token).ConfigureAwait(false);
             var parsedResponse = ParseReleases(json, channel);
             if (parsedResponse.InvalidUrl)
-                return Result(UpdateCheckStatus.InvalidResponse, current, null, "暂时无法检查更新，请稍后重试。", "Release html_url 未通过 GitHub URL 校验。", started);
+                return Result(UpdateCheckStatus.InvalidResponse, current, null, "Unable to check for updates right now. Try again later.", "Release html_url failed GitHub URL validation.", started);
             var candidate = ReleaseVersionComparer.SelectHighest(parsedResponse.Releases, channel);
             if (candidate is null)
-                return Result(UpdateCheckStatus.NoEligibleRelease, current, null, "没有符合当前更新渠道的版本。", "没有可用的非草稿 Release。", started);
+                return Result(UpdateCheckStatus.NoEligibleRelease, current, null, "No release is available for the selected channel.", "No non-draft Release is available.", started);
             if (!SemanticVersion.TryParse(candidate.TagName, out var latest))
-                return Result(UpdateCheckStatus.NoEligibleRelease, current, null, "没有符合当前更新渠道的版本。", "Release tag 不是有效的 SemVer。", started);
+                return Result(UpdateCheckStatus.NoEligibleRelease, current, null, "No release is available for the selected channel.", "The Release tag is not valid SemVer.", started);
             if (!ReleaseUrlValidator.TryValidate(candidate.HtmlUrl.ToString(), _repository, out var releaseUrl))
-                return Result(UpdateCheckStatus.InvalidResponse, current, latest, "暂时无法检查更新，请稍后重试。", "Release html_url 未通过 GitHub URL 校验。", started);
+                return Result(UpdateCheckStatus.InvalidResponse, current, latest, "Unable to check for updates right now. Try again later.", "Release html_url failed GitHub URL validation.", started);
 
             var status = latest! > current! ? UpdateCheckStatus.UpdateAvailable : UpdateCheckStatus.UpToDate;
             var userMessage = status == UpdateCheckStatus.UpdateAvailable
-                ? $"发现新版本：{latest}"
-                : "当前已是最新版本。";
+                ? $"New version available: {latest}"
+                : "You are up to date.";
             return new UpdateCheckResult(status, current!.ToNumericVersion(), latest!.ToNumericVersion(), candidate.Name,
                 ReleaseNotesSanitizer.ToPlainText(candidate.Body), candidate.PublishedAt ?? candidate.CreatedAt, releaseUrl,
                 userMessage, null)
@@ -92,27 +92,27 @@ public sealed class GitHubReleaseChecker : IReleaseUpdateChecker
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return Result(UpdateCheckStatus.Cancelled, current, null, "已取消更新检查。", "调用方取消了请求。", started);
+            return Result(UpdateCheckStatus.Cancelled, current, null, "Update check cancelled.", "The caller cancelled the request.", started);
         }
         catch (OperationCanceledException)
         {
-            return Result(UpdateCheckStatus.NetworkUnavailable, current, null, "暂时无法检查更新，请稍后重试。", "GitHub 请求超时。", started);
+            return Result(UpdateCheckStatus.NetworkUnavailable, current, null, "Unable to check for updates right now. Try again later.", "The GitHub request timed out.", started);
         }
         catch (HttpRequestException ex)
         {
-            return Result(UpdateCheckStatus.NetworkUnavailable, current, null, "暂时无法检查更新，请稍后重试。", ex.GetType().Name + "：" + ex.Message, started);
+            return Result(UpdateCheckStatus.NetworkUnavailable, current, null, "Unable to check for updates right now. Try again later.", ex.GetType().Name + ": " + ex.Message, started);
         }
         catch (JsonException ex)
         {
-            return Result(UpdateCheckStatus.InvalidResponse, current, null, "暂时无法检查更新，请稍后重试。", "GitHub 响应不是有效 JSON：" + ex.Message, started);
+            return Result(UpdateCheckStatus.InvalidResponse, current, null, "Unable to check for updates right now. Try again later.", "GitHub response was not valid JSON: " + ex.Message, started);
         }
         catch (InvalidDataException ex)
         {
-            return Result(UpdateCheckStatus.InvalidResponse, current, null, "暂时无法检查更新，请稍后重试。", ex.Message, started);
+            return Result(UpdateCheckStatus.InvalidResponse, current, null, "Unable to check for updates right now. Try again later.", ex.Message, started);
         }
         catch (Exception ex)
         {
-            return Result(UpdateCheckStatus.Failed, current, null, "暂时无法检查更新，请稍后重试。", ex.GetType().Name + "：" + ex.Message, started);
+            return Result(UpdateCheckStatus.Failed, current, null, "Unable to check for updates right now. Try again later.", ex.GetType().Name + ": " + ex.Message, started);
         }
     }
 
@@ -150,7 +150,7 @@ public sealed class GitHubReleaseChecker : IReleaseUpdateChecker
     private static async Task<string> ReadLimitedAsync(HttpResponseMessage response, long maxBytes, CancellationToken token)
     {
         if (response.Content.Headers.ContentLength.HasValue && response.Content.Headers.ContentLength.Value > maxBytes)
-            throw new InvalidDataException("GitHub 响应过大。");
+            throw new InvalidDataException("GitHub response is too large.");
         await using var stream = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
         using var memory = new MemoryStream();
         var buffer = new byte[16 * 1024];
@@ -158,7 +158,7 @@ public sealed class GitHubReleaseChecker : IReleaseUpdateChecker
         {
             var read = await stream.ReadAsync(buffer.AsMemory(), token).ConfigureAwait(false);
             if (read == 0) break;
-            if (memory.Length + read > maxBytes) throw new InvalidDataException("GitHub 响应过大。");
+            if (memory.Length + read > maxBytes) throw new InvalidDataException("GitHub response is too large.");
             memory.Write(buffer, 0, read);
         }
         return System.Text.Encoding.UTF8.GetString(memory.ToArray());

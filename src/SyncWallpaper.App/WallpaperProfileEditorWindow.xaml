@@ -1,7 +1,7 @@
 <Window x:Class="SyncWallpaper.App.WallpaperProfileEditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="编辑壁纸组合" Width="1120" Height="720" MinWidth="900" MinHeight="560"
+        Title="Edit wallpaper profile" Width="1120" Height="720" MinWidth="900" MinHeight="560"
         WindowStartupLocation="CenterOwner" WindowStyle="None" AllowsTransparency="True"
         Background="Transparent" ResizeMode="CanResizeWithGrip">
     <Border Background="#F20A162A" BorderBrush="{StaticResource GlassBorder}" BorderThickness="1" CornerRadius="16">
@@ -15,13 +15,13 @@
             <Border Grid.Row="0" Background="{StaticResource HeaderBackground}" CornerRadius="16,16,0,0" MouseLeftButtonDown="Header_MouseLeftButtonDown">
                 <DockPanel Margin="22,0,12,0">
                     <Button Content="×" DockPanel.Dock="Right" Width="42" Height="34" Padding="0" FontSize="20" Click="Cancel_Click"/>
-                    <TextBlock Text="编辑壁纸组合" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Text="Edit wallpaper profile" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 </DockPanel>
             </Border>
 
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="26,20">
                 <StackPanel>
-                    <TextBlock Text="组合信息" FontSize="17" FontWeight="SemiBold"/>
+                    <TextBlock Text="Profile information" FontSize="17" FontWeight="SemiBold"/>
                     <Grid Margin="0,12,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="100"/>
@@ -29,24 +29,24 @@
                             <ColumnDefinition Width="20"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="组合名称" VerticalAlignment="Center" Foreground="{StaticResource TextSecondary}"/>
+                        <TextBlock Text="Profile name" VerticalAlignment="Center" Foreground="{StaticResource TextSecondary}"/>
                         <TextBox x:Name="NameText" Grid.Column="1" Height="36" VerticalContentAlignment="Center"/>
                         <WrapPanel Grid.Column="3" VerticalAlignment="Center">
-                            <CheckBox x:Name="EnabledCheck" Content="参与匹配" Foreground="{StaticResource TextPrimary}" Margin="0,0,22,0"/>
-                            <TextBlock Text="配置完整后，匹配成功即自动应用" Foreground="{StaticResource Cyan}" Margin="0,0,22,0" VerticalAlignment="Center"/>
-                            <CheckBox x:Name="CompatibleCheck" Content="显示兼容候选" Foreground="{StaticResource TextPrimary}"/>
+                            <CheckBox x:Name="EnabledCheck" Content="Include in matching" Foreground="{StaticResource TextPrimary}" Margin="0,0,22,0"/>
+                            <TextBlock Text="Complete profiles are applied automatically after a match" Foreground="{StaticResource Cyan}" Margin="0,0,22,0" VerticalAlignment="Center"/>
+                            <CheckBox x:Name="CompatibleCheck" Content="Allow compatible candidates" Foreground="{StaticResource TextPrimary}"/>
                         </WrapPanel>
                     </Grid>
 
                     <Border BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Margin="0,20,0,18"/>
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Left">
-                            <TextBlock Text="显示器角色与壁纸" FontSize="17" FontWeight="SemiBold"/>
-                            <TextBlock Text="同一显示器只能分配一次。空白组合可以不添加角色，但不会参与自动匹配。" Foreground="{StaticResource TextSecondary}" Margin="0,5,0,0"/>
+                            <TextBlock Text="Monitor roles and wallpapers" FontSize="17" FontWeight="SemiBold"/>
+                            <TextBlock Text="Each monitor can be assigned only once. Blank profiles may omit roles, but will not participate in automatic matching." Foreground="{StaticResource TextSecondary}" Margin="0,5,0,0"/>
                         </StackPanel>
                         <WrapPanel DockPanel.Dock="Right" HorizontalAlignment="Right">
-                            <Button Content="按当前显示器添加角色" Click="AddCurrentMonitors_Click"/>
-                            <Button Content="添加一个角色" Click="AddRole_Click"/>
+                            <Button Content="Add current monitors" Click="AddCurrentMonitors_Click"/>
+                            <Button Content="Add a role" Click="AddRole_Click"/>
                         </WrapPanel>
                     </DockPanel>
 
@@ -58,10 +58,10 @@
                             <ColumnDefinition Width="125"/>
                             <ColumnDefinition Width="78"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="逻辑角色" Foreground="{StaticResource TextSecondary}"/>
-                        <TextBlock Grid.Column="1" Text="显示器身份" Foreground="{StaticResource TextSecondary}" Margin="8,0,0,0"/>
-                        <TextBlock Grid.Column="2" Text="壁纸" Foreground="{StaticResource TextSecondary}" Margin="8,0,0,0"/>
-                        <TextBlock Grid.Column="3" Text="填充方式" Foreground="{StaticResource TextSecondary}" Margin="8,0,0,0"/>
+                        <TextBlock Text="Logical role" Foreground="{StaticResource TextSecondary}"/>
+                        <TextBlock Grid.Column="1" Text="Monitor identity" Foreground="{StaticResource TextSecondary}" Margin="8,0,0,0"/>
+                        <TextBlock Grid.Column="2" Text="Wallpaper" Foreground="{StaticResource TextSecondary}" Margin="8,0,0,0"/>
+                        <TextBlock Grid.Column="3" Text="Fit mode" Foreground="{StaticResource TextSecondary}" Margin="8,0,0,0"/>
                     </Grid>
                     <ItemsControl x:Name="RoleItems">
                         <ItemsControl.ItemTemplate>
@@ -79,13 +79,13 @@
                                         <ComboBox Grid.Column="1" ItemsSource="{Binding MonitorChoices}" DisplayMemberPath="Label" SelectedValuePath="Key" SelectedValue="{Binding SelectedMonitorKey, Mode=TwoWay}" Margin="8,0,0,0"/>
                                         <ComboBox Grid.Column="2" ItemsSource="{Binding WallpaperChoices}" DisplayMemberPath="Label" SelectedValuePath="Id" SelectedValue="{Binding SelectedWallpaperId, Mode=TwoWay}" Margin="8,0,0,0"/>
                                         <ComboBox Grid.Column="3" ItemsSource="{Binding FitChoices}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding FitMode, Mode=TwoWay}" Margin="8,0,0,0"/>
-                                        <Button Grid.Column="4" Content="移除" Tag="{Binding}" Click="RemoveRole_Click" Padding="9,7" Margin="8,0,0,0"/>
+                                        <Button Grid.Column="4" Content="Remove" Tag="{Binding}" Click="RemoveRole_Click" Padding="9,7" Margin="8,0,0,0"/>
                                     </Grid>
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <TextBlock x:Name="EmptyHint" Text="这是空白组合。点击上方按钮添加当前显示器，或保持空白后稍后再编辑。" Foreground="{StaticResource TextSecondary}" Margin="0,10,0,0"/>
+                    <TextBlock x:Name="EmptyHint" Text="This is a blank profile. Add current monitors above, or leave it blank and edit it later." Foreground="{StaticResource TextSecondary}" Margin="0,10,0,0"/>
                 </StackPanel>
             </ScrollViewer>
 
@@ -93,8 +93,8 @@
                 <DockPanel>
                     <TextBlock x:Name="StatusText" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" TextWrapping="Wrap"/>
                     <WrapPanel DockPanel.Dock="Right" HorizontalAlignment="Right">
-                        <Button Content="取消" Click="Cancel_Click"/>
-                        <Button Content="保存修改" Click="Save_Click" BorderBrush="{StaticResource Cyan}"/>
+                        <Button Content="Cancel" Click="Cancel_Click"/>
+                        <Button Content="Save changes" Click="Save_Click" BorderBrush="{StaticResource Cyan}"/>
                     </WrapPanel>
                 </DockPanel>
             </Border>

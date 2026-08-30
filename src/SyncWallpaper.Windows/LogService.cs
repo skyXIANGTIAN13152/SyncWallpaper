@@ -35,8 +35,8 @@ public sealed class LogService
     }
 
     public void Info(string category, string message) => Write(category, message);
-    public void Warn(string category, string message) => Write(category, "警告：" + message);
-    public void Error(string category, string message) => Write(category, "错误：" + message);
+    public void Warn(string category, string message) => Write(category, "Warning: " + message);
+    public void Error(string category, string message) => Write(category, "Error: " + message);
 
     private static string Sanitize(string message)
         => Regex.Replace(message ?? string.Empty, @"(?i)([A-Z]:\\Users\\)[^\\\s]+", "$1<user>");

@@ -13,7 +13,7 @@ public sealed class GitHubReleaseCheckerTests
     public async Task StableReleaseHigherThanCurrentIsAvailable()
     {
         using var client = CreateClient("""
-            {"tag_name":"v1.0.1","name":"Release 1.0.1","body":"修复\n<script>alert(1)</script>","html_url":"https://github.com/owner/syncwallpaper/releases/tag/v1.0.1","draft":false,"prerelease":false,"published_at":"2026-08-01T00:00:00Z"}
+            {"tag_name":"v1.0.1","name":"Release 1.0.1","body":"Fix\n<script>alert(1)</script>","html_url":"https://github.com/owner/syncwallpaper/releases/tag/v1.0.1","draft":false,"prerelease":false,"published_at":"2026-08-01T00:00:00Z"}
             """);
         var result = await new GitHubReleaseChecker(client, Repository, "1.0.0").CheckAsync(UpdateChannel.Stable, CancellationToken.None);
         Assert.AreEqual(UpdateCheckStatus.UpdateAvailable, result.Status);
