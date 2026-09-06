@@ -77,7 +77,8 @@ public sealed class AppRuntime : IDisposable
 
         var loadedProfiles = Store.Load("profiles.json", new ProfilesDocument());
         var loadedProfileSchema = loadedProfiles.SchemaVersion;
-        Profiles = ProfileSchemaMigrator.Migrate(loadedProfiles);
+        var profileMigrationMessages = new List<string>();
+        Profiles = ProfileSchemaMigrator.Migrate(loadedProfiles, profileMigrationMessages.Add);
         Library = Store.Load("library.json", new LibraryDocument());
         var libraryChanged = RestoreMissingAssetsFromSourceFolders(Library, Paths.Root);
         var profilesChanged = NormalizeWallpaperBindings(Profiles, Library, Paths.Root);
@@ -88,11 +89,12 @@ public sealed class AppRuntime : IDisposable
         }
 
         if (libraryChanged) Store.Save("library.json", Library);
-        if (profilesChanged || loadedProfileSchema < ProfileSchemaMigrator.CurrentSchemaVersion)
+        if (profilesChanged || loadedProfileSchema < ProfileSchemaMigrator.CurrentSchemaVersion || profileMigrationMessages.Count > 0)
             Store.Save("profiles.json", Profiles);
         if (settingsChanged) Store.Save("settings.json", Settings);
 
         _log = new LogService(Paths);
+        foreach (var message in profileMigrationMessages) _log.Info("Config", message);
         RemoveRetiredFeatureData();
         if (loadedProfileSchema < ProfileSchemaMigrator.CurrentSchemaVersion)
             _log.Info("Config", $"profiles.json 已迁移到 SchemaVersion={Profiles.SchemaVersion}");
@@ -188,6 +190,13 @@ public sealed class AppRuntime : IDisposable
         RaiseChanged();
     }
 
+    public void SetUiTheme(string themeId)
+    {
+        Settings.UiTheme = AppThemeCatalog.Get(themeId).Id;
+        TrySaveSettings();
+        RaiseChanged();
+    }
+
     public void SetStartup(bool enabled)
     {
         var executable = Environment.ProcessPath ?? string.Empty;
@@ -205,7 +214,7 @@ public sealed class AppRuntime : IDisposable
 
     public async Task ReapplyAsync()
     {
-        if (Monitors.Count == 0) Monitors = _discovery.Discover();
+        Monitors = _discovery.Discover();
         WallpaperProfile? preferredProfile = null;
         if (LastMatch is { Profile: not null, CanAutoApply: true } previous
             && previous.Status is MatchStatus.Exact or MatchStatus.Compatible)
@@ -312,52 +321,25 @@ public sealed class AppRuntime : IDisposable
     public void ApplyManualDisplayAssignments(IReadOnlyList<ManualDisplayAssignment> assignments)
     {
         if (assignments.Count == 0) return;
-        var profile = Profiles.Profiles.FirstOrDefault(x => string.Equals(x.Id, Settings.EditingProfileId, StringComparison.OrdinalIgnoreCase))
-            ?? ProfileTemplates.Custom("手动确认配置", assignments.Select(x => x.Role));
-        if (!Profiles.Profiles.Contains(profile)) Profiles.Profiles.Add(profile);
-
-        var existingRoles = profile.Roles
-            .Where(x => !string.IsNullOrWhiteSpace(x.Role))
-            .GroupBy(x => x.Role, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
-        profile.Roles.Clear();
-        profile.ExpectedMonitorCount = assignments.Count;
-        profile.Combination = assignments.Count == 1
-            ? DisplayCombinationKind.LaptopOnly
-            : assignments.Count == 3 ? DisplayCombinationKind.ThreeMonitorSetup : DisplayCombinationKind.Custom;
-        profile.ModifiedAt = DateTime.UtcNow;
-
-        foreach (var assignment in assignments)
+        var monitors = _discovery.Discover();
+        if (assignments.Count != monitors.Count)
+            throw new InvalidOperationException("显示器数量已改变，请重新识别后保存。");
+        var resolved = assignments.Select(assignment =>
         {
-            var monitor = Monitors.FirstOrDefault(x =>
-                (!string.IsNullOrWhiteSpace(assignment.StableId) && x.StableId.Equals(assignment.StableId, StringComparison.OrdinalIgnoreCase))
-                || (!string.IsNullOrWhiteSpace(assignment.MonitorDevicePath) && x.MonitorDevicePath.Equals(assignment.MonitorDevicePath, StringComparison.OrdinalIgnoreCase)));
-            if (monitor is null) continue;
-            var role = string.Equals(assignment.Role, "Custom", StringComparison.OrdinalIgnoreCase)
-                ? $"Custom-{monitor.TargetId}"
-                : assignment.Role;
-            existingRoles.TryGetValue(role, out var existing);
-            var wallpaperPath = assignment.WallpaperPath;
-            var wallpaperAssetId = string.IsNullOrWhiteSpace(wallpaperPath) ? existing?.WallpaperAssetId ?? string.Empty : string.Empty;
-            if (string.IsNullOrWhiteSpace(wallpaperPath) && !string.IsNullOrWhiteSpace(wallpaperAssetId))
-            {
-                var asset = Library.Assets.FirstOrDefault(x => x.Id.Equals(wallpaperAssetId, StringComparison.OrdinalIgnoreCase));
-                if (asset is not null) wallpaperPath = ManagedAssetPath(asset, Paths.Root);
-            }
-            profile.Roles.Add(new MonitorRoleBinding
-            {
-                RoleId = existing?.RoleId ?? Guid.NewGuid().ToString("N"),
-                Role = role,
-                DisplayName = existing?.DisplayName ?? RoleDisplayName(role),
-                Fingerprint = monitor.Clone(),
-                WallpaperAssetId = wallpaperAssetId,
-                WallpaperPath = wallpaperPath,
-                FitMode = existing?.FitMode ?? WallpaperFitMode.Fill,
-                BackgroundColor = existing?.BackgroundColor ?? "#050B18",
-                LastKnownMonitorDevicePath = monitor.MonitorDevicePath,
-                Notes = "用户在 A/B/C 识别界面确认"
-            });
-        }
+            var candidates = monitors.Where(m => !string.IsNullOrWhiteSpace(assignment.MonitorDevicePath)
+                ? m.MonitorDevicePath.Equals(assignment.MonitorDevicePath, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(assignment.StableId) && m.StableId.Equals(assignment.StableId, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (candidates.Length != 1 || (!string.IsNullOrWhiteSpace(assignment.StableId)
+                && !candidates[0].StableId.Equals(assignment.StableId, StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException("显示器连接或身份已改变，请重新识别后保存。");
+            return new ManualWallpaperAssignment(candidates[0], assignment.Role, assignment.WallpaperPath);
+        }).ToArray();
+        var profile = Profiles.Profiles.FirstOrDefault(x => string.Equals(x.Id, Settings.EditingProfileId, StringComparison.OrdinalIgnoreCase))
+            ?? new WallpaperProfile { Name = "手动确认配置" };
+        ManualWallpaperBindingService.Apply(profile, resolved);
+        if (!Profiles.Profiles.Contains(profile)) Profiles.Profiles.Add(profile);
+        Monitors = monitors;
+        if (LastMatch?.Profile?.Id.Equals(profile.Id, StringComparison.OrdinalIgnoreCase) == true) LastMatch = null;
 
         profile.AutoApply = WallpaperProfileApplyPolicy.IsComplete(profile);
         Settings.EditingProfileId = profile.Id;
@@ -366,6 +348,19 @@ public sealed class AppRuntime : IDisposable
         LastMessage = $"已保存 {profile.Roles.Count} 个显示器角色绑定";
         _log.Info("Config", LastMessage);
         RaiseChanged();
+    }
+
+    public IReadOnlyList<ManualDisplayAssignment> GetManualDisplayAssignments()
+    {
+        var profile = FindWallpaperProfile(Settings.EditingProfileId ?? string.Empty) ?? LastMatch?.Profile;
+        return Monitors.Select(monitor =>
+        {
+            var binding = profile is null ? null : ManualWallpaperBindingService.FindExisting(profile.Roles, monitor);
+            var asset = Library.Assets.FirstOrDefault(x => x.Id.Equals(binding?.WallpaperAssetId, StringComparison.OrdinalIgnoreCase));
+            return new ManualDisplayAssignment(monitor.StableId, monitor.MonitorDevicePath,
+                binding?.Role ?? (monitor.IsInternal ? "Laptop" : monitor.Width >= monitor.Height ? "Landscape" : "Portrait"),
+                asset is not null ? ManagedAssetPath(asset, Paths.Root) : binding?.WallpaperPath ?? string.Empty);
+        }).ToArray();
     }
 
     public void ImportWallpaper(string path)
@@ -497,7 +492,9 @@ public sealed class AppRuntime : IDisposable
         {
             if (string.IsNullOrWhiteSpace(role.WallpaperAssetId))
             {
-                role.WallpaperPath = string.Empty;
+                role.WallpaperPath = role.WallpaperPath.Trim();
+                if (!string.IsNullOrWhiteSpace(role.WallpaperPath) && !File.Exists(role.WallpaperPath))
+                    throw new InvalidOperationException($"逻辑角色“{role.Role}”选择的壁纸文件不存在。");
                 continue;
             }
             var asset = Library.Assets.FirstOrDefault(x => x.Id.Equals(role.WallpaperAssetId, StringComparison.OrdinalIgnoreCase) && !x.IsMissing)
@@ -522,7 +519,7 @@ public sealed class AppRuntime : IDisposable
 
     public async Task<bool> ApplyWallpaperProfileAsync(string profileId)
     {
-        if (Monitors.Count == 0) Monitors = _discovery.Discover();
+        Monitors = _discovery.Discover();
         var profile = FindWallpaperProfile(profileId);
         if (profile is null)
         {

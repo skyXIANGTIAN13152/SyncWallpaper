@@ -36,15 +36,31 @@ public sealed class WallpaperProfileEditingTests
     }
 
     [TestMethod]
-    public void DuplicateRolesAndDuplicateMonitorsAreRejected()
+    public void DuplicateRoleLabelsAreAllowedButDuplicateMonitorsAreRejected()
     {
         var monitor = TestData.Monitor();
         var profile = WallpaperProfileEditingService.CreateBlank("test", 100);
         var duplicateRole = Draft(Role("Laptop", monitor), Role("Laptop", TestData.Monitor("PATH-B", "SERIAL-B")));
-        StringAssert.Contains(Assert.ThrowsException<InvalidOperationException>(() => WallpaperProfileEditingService.Apply(profile, duplicateRole)).Message, "重复");
+        WallpaperProfileEditingService.Apply(profile, duplicateRole);
+        Assert.AreEqual(2, profile.Roles.Count);
+        Assert.AreNotEqual(profile.Roles[0].RoleId, profile.Roles[1].RoleId);
 
         var duplicateMonitor = Draft(Role("Laptop", monitor), Role("Portrait", monitor));
         StringAssert.Contains(Assert.ThrowsException<InvalidOperationException>(() => WallpaperProfileEditingService.Apply(profile, duplicateMonitor)).Message, "同一台显示器");
+    }
+
+    [TestMethod]
+    public void EditingRepairsDuplicateBindingIdsWithoutChangingWallpapers()
+    {
+        var profile = WallpaperProfileEditingService.CreateBlank("test", 100);
+        var first = Role("Portrait", TestData.Monitor("PATH-A", "SERIAL-A"), "first");
+        var second = Role("Portrait", TestData.Monitor("PATH-B", "SERIAL-B"), "second");
+        first.RoleId = second.RoleId = "duplicate";
+
+        WallpaperProfileEditingService.Apply(profile, Draft(first, second));
+
+        Assert.AreNotEqual(profile.Roles[0].RoleId, profile.Roles[1].RoleId);
+        CollectionAssert.AreEqual(new[] { "first", "second" }, profile.Roles.Select(x => x.WallpaperAssetId).ToArray());
     }
 
     [TestMethod]

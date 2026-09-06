@@ -1,21 +1,59 @@
 <Window x:Class="SyncWallpaper.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:core="clr-namespace:SyncWallpaper.Core;assembly=SyncWallpaper.Core"
         Title="屏序 SyncWallpaper" Width="1180" Height="760" MinWidth="980" MinHeight="640"
         WindowStartupLocation="CenterScreen" AllowsTransparency="True" WindowStyle="None"
         ResizeMode="CanResizeWithGrip" Background="Transparent"
-        FontFamily="Segoe UI, Microsoft YaHei UI" Foreground="{StaticResource TextPrimary}">
+        FontFamily="Segoe UI, Microsoft YaHei UI" Foreground="{DynamicResource TextPrimary}">
     <Window.Resources>
-        <LinearGradientBrush x:Key="NebulaGlow" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#563B7BFF" Offset="0"/>
-            <GradientStop Color="#18256DCC" Offset="0.55"/>
-            <GradientStop Color="#00000000" Offset="1"/>
-        </LinearGradientBrush>
-        <LinearGradientBrush x:Key="EyeGradient" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#6BF3FF" Offset="0"/>
-            <GradientStop Color="#25B7FF" Offset="0.55"/>
-            <GradientStop Color="#697CFF" Offset="1"/>
-        </LinearGradientBrush>
+        <DataTemplate x:Key="ThemePreview">
+            <StackPanel>
+                <Border Background="{Binding PreviewSurface}" CornerRadius="7" Padding="9" Height="68">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="26"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,6,0">
+                            <Border Background="{Binding PreviewAccent}" Height="5" CornerRadius="2" Margin="0,3,0,6"/>
+                            <Border Background="{Binding PreviewCard}" Height="4" CornerRadius="2" Margin="0,0,0,6"/>
+                            <Border Background="{Binding PreviewCard}" Height="4" CornerRadius="2"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <Border Background="{Binding PreviewSecondary}" Height="4" Width="44" HorizontalAlignment="Left" CornerRadius="2" Margin="0,3,0,8"/>
+                            <UniformGrid Columns="3">
+                                <Border Background="{Binding PreviewCard}" Height="24" CornerRadius="4" Margin="0,0,4,0"/>
+                                <Border Background="{Binding PreviewCard}" Height="24" CornerRadius="4" Margin="0,0,4,0"/>
+                                <Border Background="{Binding PreviewCard}" Height="24" CornerRadius="4"/>
+                            </UniformGrid>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" Margin="0,10,0,4"/>
+                <TextBlock Text="{Binding Description}" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+            </StackPanel>
+        </DataTemplate>
+        <Style x:Key="ThemeTile" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="Width" Value="206"/><Setter Property="Margin" Value="0,0,10,10"/>
+            <Setter Property="ContentTemplate" Value="{StaticResource ThemePreview}"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template"><Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Tile" Background="{DynamicResource PanelBackground}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="12" Padding="12">
+                        <Grid>
+                            <ContentPresenter TextElement.Foreground="{TemplateBinding Foreground}"/>
+                            <Border x:Name="SelectedMark" Background="{DynamicResource Cyan}" CornerRadius="5" Padding="5,2" HorizontalAlignment="Right" VerticalAlignment="Top" Visibility="Collapsed">
+                                <TextBlock Text="✓" Foreground="{DynamicResource OnAccent}" FontWeight="Bold"/>
+                            </Border>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True"><Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource Cyan}"/><Setter TargetName="SelectedMark" Property="Visibility" Value="Visible"/></Trigger>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Tile" Property="Background" Value="{DynamicResource ControlHover}"/></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value></Setter>
+        </Style>
         <Style x:Key="NavButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
             <Setter Property="Background" Value="Transparent"/>
@@ -26,10 +64,10 @@
             <Setter Property="FontWeight" Value="Normal"/>
         </Style>
         <Style x:Key="Card" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource GlassCardBackground}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource GlassBorder}"/>
+            <Setter Property="Background" Value="{DynamicResource GlassCardBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource GlassBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="16"/>
+            <Setter Property="CornerRadius" Value="12"/>
             <Setter Property="Padding" Value="18"/>
             <Setter Property="Margin" Value="0,0,14,14"/>
         </Style>
@@ -40,65 +78,61 @@
             <Setter Property="Margin" Value="2,0,0,0"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="Background" Value="#55325E77"/>
-            <Setter Property="BorderBrush" Value="#6E8AA8C8"/>
+            <Setter Property="Background" Value="{DynamicResource PanelBackground2}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource GlassBorder}"/>
         </Style>
         <Style x:Key="WindowCloseButton" TargetType="Button" BasedOn="{StaticResource WindowChromeButton}">
-            <Setter Property="Background" Value="#553D304C"/>
+            <Setter Property="Background" Value="{DynamicResource PanelBackground2}"/>
         </Style>
     </Window.Resources>
 
     <Grid>
-        <Ellipse x:Name="NebulaGlowTop" Width="640" Height="640" HorizontalAlignment="Right" VerticalAlignment="Top"
-                 Margin="0,-260,-190,0" Fill="{StaticResource NebulaGlow}" Opacity="0.55" IsHitTestVisible="False"/>
-        <Ellipse x:Name="NebulaGlowBottom" Width="440" Height="440" HorizontalAlignment="Left" VerticalAlignment="Bottom"
-                 Margin="-220,0,0,-190" Fill="{StaticResource NebulaGlow}" Opacity="0.3" IsHitTestVisible="False"/>
-
-        <Border Margin="10" Background="{StaticResource WindowSurface}" BorderBrush="{StaticResource GlassBorder}"
-                BorderThickness="1" CornerRadius="24" Padding="1">
+        <Border Margin="10" Background="{DynamicResource WindowSurface}" BorderBrush="{DynamicResource GlassBorder}"
+                BorderThickness="1" CornerRadius="18" Padding="1">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="72"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <Border Grid.Row="0" BorderBrush="#47739BBA" BorderThickness="0,0,0,1"
-                        Background="{StaticResource HeaderBackground}" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Border Grid.Row="0" BorderBrush="{DynamicResource GlassBorder}" BorderThickness="0,0,0,1"
+                        CornerRadius="18,18,0,0" Background="{DynamicResource HeaderBackground}" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                     <Grid Margin="24,0">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <Grid Width="46" Height="46" Margin="0,0,12,0">
-                                <Ellipse Fill="#20347DAD" Stroke="#8B4EE8FF" StrokeThickness="1" Margin="2"/>
-                                <Ellipse Stroke="{StaticResource Cyan}" StrokeThickness="1.8" Margin="7"/>
+                                <Ellipse Fill="{DynamicResource PanelBackground2}" Stroke="{DynamicResource Blue}" StrokeThickness="1" Margin="2"/>
+                                <Ellipse Stroke="{DynamicResource Cyan}" StrokeThickness="1.8" Margin="7"/>
                                 <Path Data="M5,23 C13,12 33,12 41,23 C33,34 13,34 5,23 Z"
-                                      Fill="{StaticResource EyeGradient}" Stroke="{StaticResource Cyan}" StrokeThickness="1.2"/>
-                                <Ellipse Width="14" Height="14" Fill="#101A35" Stroke="{StaticResource Cyan}" StrokeThickness="1.4"/>
-                                <Ellipse Width="6" Height="6" Fill="{StaticResource Cyan}"/>
+                                      Fill="{DynamicResource AccentGradient}" Stroke="{DynamicResource Cyan}" StrokeThickness="1.2"/>
+                                <Ellipse Width="14" Height="14" Fill="{DynamicResource InputBackground}" Stroke="{DynamicResource Cyan}" StrokeThickness="1.4"/>
+                                <Ellipse Width="6" Height="6" Fill="{DynamicResource Cyan}"/>
                                 <Ellipse Width="2" Height="2" Fill="White" Margin="2,0,0,2"/>
                             </Grid>
                             <StackPanel>
                                 <TextBlock Text="屏序 SyncWallpaper" FontSize="20" FontWeight="SemiBold"/>
-                                <TextBlock Text="多显示器壁纸识别、匹配与恢复" FontSize="11" Foreground="{StaticResource TextSecondary}"/>
+                                <TextBlock Text="多显示器壁纸识别、匹配与恢复" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
                             </StackPanel>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                            <Border Background="#55325E77" BorderBrush="#8A35DFF7" BorderThickness="1" CornerRadius="14" Padding="11,5">
+                            <Border Background="{DynamicResource PanelBackground2}" BorderBrush="{DynamicResource GlassBorder}" BorderThickness="1" CornerRadius="14" Padding="11,5">
                                 <StackPanel Orientation="Horizontal">
-                                    <Ellipse Width="7" Height="7" Fill="{StaticResource Cyan}" Margin="0,0,7,0" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="StatusBadge" Text="正在启动" Foreground="{StaticResource Cyan}" FontSize="12"/>
+                                    <Ellipse x:Name="StatusDot" Width="7" Height="7" Fill="{DynamicResource Success}" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="StatusBadge" Text="正在启动" Foreground="{DynamicResource Cyan}" FontSize="12"/>
                                 </StackPanel>
                             </Border>
                             <Button Style="{StaticResource WindowChromeButton}" Margin="14,0,0,0" Click="Minimize_Click" ToolTip="最小化">
-                                <Path Data="M3,8 H13" Stroke="{StaticResource TextPrimary}" StrokeThickness="1.6"/>
+                                <Path Data="M3,8 H13" Stroke="{DynamicResource TextPrimary}" StrokeThickness="1.6"/>
                             </Button>
                             <Button Style="{StaticResource WindowChromeButton}" Click="Maximize_Click" ToolTip="最大化或还原">
-                                <Path Data="M3,3 H13 V13 H3 Z" Stroke="{StaticResource TextPrimary}" StrokeThickness="1.45" Fill="Transparent"/>
+                                <Path Data="M3,3 H13 V13 H3 Z" Stroke="{DynamicResource TextPrimary}" StrokeThickness="1.45" Fill="Transparent"/>
                             </Button>
                             <Button Style="{StaticResource WindowCloseButton}" Click="Close_Click" ToolTip="隐藏到托盘">
-                                <Path Data="M3,3 L13,13 M13,3 L3,13" Stroke="{StaticResource TextPrimary}" StrokeThickness="1.6"/>
+                                <Path Data="M3,3 L13,13 M13,3 L3,13" Stroke="{DynamicResource TextPrimary}" StrokeThickness="1.6"/>
                             </Button>
                         </StackPanel>
                     </Grid>
                 </Border>
+                <Border Height="2" VerticalAlignment="Bottom" Background="{DynamicResource AccentGradient}" Opacity="0.8" IsHitTestVisible="False"/>
 
                 <Grid Grid.Row="1">
                     <Grid.ColumnDefinitions>
@@ -106,9 +140,9 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <Border Grid.Column="0" Background="#B5081428" BorderBrush="#47739BBA" BorderThickness="0,0,1,0">
-                        <StackPanel Margin="12,22">
-                            <TextBlock Text="壁纸功能" Foreground="{StaticResource TextSecondary}" FontSize="11" Margin="12,0,0,10"/>
+                    <Border Grid.Column="0" Background="{DynamicResource SidebarBackground}" BorderBrush="{DynamicResource GlassBorder}" BorderThickness="0,0,1,0" CornerRadius="0,0,0,18">
+                        <StackPanel x:Name="NavigationPanel" Margin="12,22">
+                            <TextBlock Text="壁纸功能" Foreground="{DynamicResource TextSecondary}" FontSize="11" Margin="12,0,0,10"/>
                             <Button Tag="Overview" Style="{StaticResource NavButton}" Content="⌂  概览" Click="Nav_Click"/>
                             <Button Tag="Monitors" Style="{StaticResource NavButton}" Content="▣  显示器识别" Click="Nav_Click"/>
                             <Button Tag="Library" Style="{StaticResource NavButton}" Content="▧  壁纸档案库" Click="Nav_Click"/>
@@ -116,45 +150,45 @@
                             <Button Tag="Logs" Style="{StaticResource NavButton}" Content="≡  运行记录" Click="Nav_Click"/>
                             <Button Tag="Settings" Style="{StaticResource NavButton}" Content="⚙  设置" Click="Nav_Click"/>
                             <Button Tag="About" Style="{StaticResource NavButton}" Content="ⓘ  关于" Click="Nav_Click"/>
-                            <Border Margin="8,30,8,0" Padding="12" Background="#A51A3150" BorderBrush="#6A4F88A8" BorderThickness="1" CornerRadius="12">
+                            <Border Margin="8,30,8,0" Padding="12" Background="{DynamicResource GlassCardBackground}" BorderBrush="{DynamicResource GlassBorder}" BorderThickness="1" CornerRadius="12">
                                 <StackPanel>
-                                    <TextBlock Text="专注模式" Foreground="{StaticResource TextSecondary}" FontSize="11"/>
-                                    <TextBlock Text="仅监测显示器与壁纸" Foreground="{StaticResource Cyan}" Margin="0,5,0,0" FontSize="12"/>
-                                    <TextBlock Text="无音频、窗口或任务栏模块" TextWrapping="Wrap" Foreground="{StaticResource TextSecondary}" Margin="0,5,0,0" FontSize="10"/>
+                                    <TextBlock Text="专注模式" Foreground="{DynamicResource TextSecondary}" FontSize="11"/>
+                                    <TextBlock Text="仅监测显示器与壁纸" Foreground="{DynamicResource Cyan}" Margin="0,5,0,0" FontSize="12"/>
+                                    <TextBlock Text="无音频、窗口或任务栏模块" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}" Margin="0,5,0,0" FontSize="10"/>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
                     </Border>
 
-                    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="28,24">
+                    <ScrollViewer x:Name="PageScroll" Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="28,24">
                         <Grid>
                             <StackPanel x:Name="OverviewPanel">
                                 <TextBlock Text="概览" FontSize="27" FontWeight="SemiBold"/>
-                                <TextBlock Text="当前显示器组合与壁纸事务" Foreground="{StaticResource TextSecondary}" Margin="0,4,0,22"/>
+                                <TextBlock Text="当前显示器组合与壁纸事务" Foreground="{DynamicResource TextSecondary}" Margin="0,4,0,22"/>
                                 <UniformGrid Columns="4">
                                     <Border Style="{StaticResource Card}">
-                                        <StackPanel><TextBlock Text="状态" Foreground="{StaticResource TextSecondary}"/><TextBlock x:Name="OverviewStatus" Text="—" FontSize="21" Margin="0,12,0,0"/></StackPanel>
+                                        <StackPanel><TextBlock Text="状态" Foreground="{DynamicResource TextSecondary}"/><TextBlock x:Name="OverviewStatus" Text="—" FontSize="21" Margin="0,12,0,0"/></StackPanel>
                                     </Border>
                                     <Border Style="{StaticResource Card}">
-                                        <StackPanel><TextBlock Text="活动显示器" Foreground="{StaticResource TextSecondary}"/><TextBlock x:Name="MonitorCount" Text="0" FontSize="21" Margin="0,12,0,0"/></StackPanel>
+                                        <StackPanel><TextBlock Text="活动显示器" Foreground="{DynamicResource TextSecondary}"/><TextBlock x:Name="MonitorCount" Text="0" FontSize="24" Foreground="{DynamicResource Blue}" Margin="0,12,0,0"/></StackPanel>
                                     </Border>
                                     <Border Style="{StaticResource Card}">
-                                        <StackPanel><TextBlock Text="匹配组合" Foreground="{StaticResource TextSecondary}"/><TextBlock x:Name="ProfileName" Text="未匹配" FontSize="18" Margin="0,12,0,0" TextTrimming="CharacterEllipsis"/></StackPanel>
+                                        <StackPanel><TextBlock Text="匹配组合" Foreground="{DynamicResource TextSecondary}"/><TextBlock x:Name="ProfileName" Text="未匹配" FontSize="18" Foreground="{DynamicResource Purple}" Margin="0,12,0,0" TextTrimming="CharacterEllipsis"/></StackPanel>
                                     </Border>
                                     <Border Style="{StaticResource Card}">
-                                        <StackPanel><TextBlock Text="匹配置信度" Foreground="{StaticResource TextSecondary}"/><TextBlock x:Name="Confidence" Text="—" FontSize="21" Foreground="{StaticResource Cyan}" Margin="0,12,0,0"/></StackPanel>
+                                        <StackPanel><TextBlock Text="匹配置信度" Foreground="{DynamicResource TextSecondary}"/><TextBlock x:Name="Confidence" Text="—" FontSize="21" Foreground="{DynamicResource Cyan}" Margin="0,12,0,0"/></StackPanel>
                                     </Border>
                                 </UniformGrid>
                                 <StackPanel Orientation="Horizontal" Margin="0,4,0,18">
                                     <Button Content="重新检测" Click="Detect_Click"/>
-                                    <Button Content="重新应用已匹配壁纸" Click="Reapply_Click"/>
+                                    <Button Content="重新应用已匹配壁纸" Click="Reapply_Click" Style="{StaticResource PrimaryButton}"/>
                                     <Button Content="识别 A/B/C" Click="Identify_Click"/>
                                 </StackPanel>
                                 <Border Style="{StaticResource Card}">
                                     <StackPanel>
-                                        <TextBlock Text="最近状态" Foreground="{StaticResource TextSecondary}"/>
+                                        <TextBlock Text="最近状态" Foreground="{DynamicResource TextSecondary}"/>
                                         <TextBlock x:Name="LastMessage" Text="—" FontSize="16" TextWrapping="Wrap" Margin="0,9,0,5"/>
-                                        <TextBlock x:Name="WallpaperTransactionText" Text="—" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap"/>
+                                        <TextBlock x:Name="WallpaperTransactionText" Text="—" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </Border>
                                 <TextBlock Text="当前屏幕与壁纸" FontSize="18" FontWeight="SemiBold" Margin="0,6,0,12"/>
@@ -164,10 +198,10 @@
                                         <DataTemplate>
                                             <Border Style="{StaticResource Card}" Width="300" MinHeight="154">
                                                 <StackPanel>
-                                                    <TextBlock Text="{Binding Role}" Foreground="{StaticResource Cyan}" FontSize="14"/>
+                                                    <TextBlock Text="{Binding Role}" Foreground="{DynamicResource Cyan}" FontSize="14"/>
                                                     <TextBlock Text="{Binding Name}" FontSize="18" FontWeight="SemiBold" Margin="0,6,0,0"/>
-                                                    <TextBlock Text="{Binding Geometry}" Foreground="{StaticResource TextSecondary}" Margin="0,7,0,0"/>
-                                                    <TextBlock Text="{Binding Wallpaper}" Foreground="{StaticResource Cyan}" TextWrapping="Wrap" Margin="0,7,0,0"/>
+                                                    <TextBlock Text="{Binding Geometry}" Foreground="{DynamicResource TextSecondary}" Margin="0,7,0,0"/>
+                                                    <TextBlock Text="{Binding Wallpaper}" Foreground="{DynamicResource Cyan}" TextWrapping="Wrap" Margin="0,7,0,0"/>
                                                 </StackPanel>
                                             </Border>
                                         </DataTemplate>
@@ -177,7 +211,7 @@
 
                             <StackPanel x:Name="MonitorsPanel" Visibility="Collapsed">
                                 <TextBlock Text="显示器识别" FontSize="27" FontWeight="SemiBold"/>
-                                <TextBlock Text="完整读取硬件身份与当前显示信息；本页不会修改 Windows 显示设置" Foreground="{StaticResource TextSecondary}" Margin="0,4,0,18"/>
+                                <TextBlock Text="完整读取硬件身份与当前显示信息；本页不会修改 Windows 显示设置" Foreground="{DynamicResource TextSecondary}" Margin="0,4,0,18"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
                                     <Button Content="重新检测" Click="Detect_Click"/>
                                     <Button Content="在每个屏幕显示 A/B/C" Click="Identify_Click"/>
@@ -189,14 +223,14 @@
                                                 <Grid>
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="210"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                                     <StackPanel>
-                                                        <TextBlock Text="{Binding Role}" Foreground="{StaticResource Cyan}" FontSize="14"/>
+                                                        <TextBlock Text="{Binding Role}" Foreground="{DynamicResource Cyan}" FontSize="14"/>
                                                         <TextBlock Text="{Binding Name}" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,7,0,0"/>
-                                                        <TextBlock Text="{Binding Wallpaper}" Foreground="{StaticResource Cyan}" TextWrapping="Wrap" Margin="0,10,0,0"/>
+                                                        <TextBlock Text="{Binding Wallpaper}" Foreground="{DynamicResource Cyan}" TextWrapping="Wrap" Margin="0,10,0,0"/>
                                                     </StackPanel>
                                                     <StackPanel Grid.Column="1">
                                                         <TextBlock Text="{Binding DisplayInfo}" TextWrapping="Wrap"/>
-                                                        <TextBlock Text="{Binding ColorInfo}" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,7,0,0"/>
-                                                        <TextBlock Text="{Binding IdentityInfo}" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,7,0,0"/>
+                                                        <TextBlock Text="{Binding ColorInfo}" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" Margin="0,7,0,0"/>
+                                                        <TextBlock Text="{Binding IdentityInfo}" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" Margin="0,7,0,0"/>
                                                     </StackPanel>
                                                 </Grid>
                                             </Border>
@@ -206,20 +240,20 @@
                                 <Border Style="{StaticResource Card}">
                                     <StackPanel>
                                         <TextBlock Text="匹配依据" FontSize="17" FontWeight="SemiBold"/>
-                                        <TextBlock x:Name="MatchEvidence" Text="尚未匹配" TextWrapping="Wrap" Foreground="{StaticResource TextSecondary}" Margin="0,9,0,0"/>
+                                        <TextBlock x:Name="MatchEvidence" Text="尚未匹配" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}" Margin="0,9,0,0"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
 
                             <StackPanel x:Name="LibraryPanel" Visibility="Collapsed">
                                 <TextBlock Text="壁纸档案库" FontSize="27" FontWeight="SemiBold"/>
-                                <TextBlock Text="所有托管壁纸都保存在 D 盘屏序目录；外部删除后点击刷新即可同步" Foreground="{StaticResource TextSecondary}" Margin="0,4,0,18"/>
+                                <TextBlock Text="所有托管壁纸都保存在 D 盘屏序目录；外部删除后点击刷新即可同步" Foreground="{DynamicResource TextSecondary}" Margin="0,4,0,18"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                    <Button Content="导入壁纸" Click="ImportWallpaper_Click"/>
+                                    <Button Content="导入壁纸" Click="ImportWallpaper_Click" Style="{StaticResource PrimaryButton}"/>
                                     <Button Content="打开壁纸目录" Click="OpenWallpapers_Click"/>
                                     <Button Content="刷新档案库" Click="RefreshLibrary_Click"/>
                                 </StackPanel>
-                                <TextBlock x:Name="LibraryStatusText" Foreground="{StaticResource TextSecondary}" Margin="0,0,0,18"/>
+                                <TextBlock x:Name="LibraryStatusText" Foreground="{DynamicResource TextSecondary}" Margin="0,0,0,18"/>
                                 <ItemsControl x:Name="LibraryItems">
                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
@@ -227,8 +261,8 @@
                                             <Border Style="{StaticResource Card}" Width="292" MinHeight="116">
                                                 <StackPanel>
                                                     <TextBlock Text="{Binding Name}" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                                    <TextBlock Text="{Binding Details}" Foreground="{StaticResource TextSecondary}" Margin="0,8,0,0"/>
-                                                    <TextBlock Text="{Binding Path}" Foreground="{StaticResource Cyan}" TextTrimming="CharacterEllipsis" Margin="0,7,0,0"/>
+                                                    <TextBlock Text="{Binding Details}" Foreground="{DynamicResource TextSecondary}" Margin="0,8,0,0"/>
+                                                    <TextBlock Text="{Binding Path}" Foreground="{DynamicResource Cyan}" TextTrimming="CharacterEllipsis" Margin="0,7,0,0"/>
                                                 </StackPanel>
                                             </Border>
                                         </DataTemplate>
@@ -238,27 +272,27 @@
 
                             <StackPanel x:Name="ProfilesPanel" Visibility="Collapsed">
                                 <TextBlock Text="壁纸组合" FontSize="27" FontWeight="SemiBold"/>
-                                <TextBlock Text="每套组合保存显示器硬件身份、逻辑角色与对应壁纸；拓扑变化后自动匹配" Foreground="{StaticResource TextSecondary}" Margin="0,4,0,18"/>
+                                <TextBlock Text="每套组合保存显示器硬件身份、逻辑角色与对应壁纸；拓扑变化后自动匹配" Foreground="{DynamicResource TextSecondary}" Margin="0,4,0,18"/>
                                 <WrapPanel Margin="0,0,0,14">
-                                    <TextBox x:Name="ProfileNameInput" Width="250" Height="39" VerticalContentAlignment="Center" Margin="0,0,10,8"/>
-                                    <Button Content="保存当前组合" Click="SaveCurrentProfile_Click" Margin="0,0,8,8"/>
+                                    <TextBox x:Name="ProfileNameInput" Width="250" Height="39" VerticalContentAlignment="Center" Margin="0,0,10,8" ToolTip="输入组合名称"/>
+                                    <Button Content="保存当前组合" Click="SaveCurrentProfile_Click" Margin="0,0,8,8" Style="{StaticResource PrimaryButton}"/>
                                     <Button Content="新建空白组合" Click="CreateBlankProfile_Click" Margin="0,0,8,8"/>
                                     <Button Content="编辑选中组合" Click="EditProfile_Click" Margin="0,0,8,8"/>
                                     <Button Content="应用选中组合" Click="ApplyProfile_Click" Margin="0,0,8,8"/>
                                     <Button Content="重命名" Click="RenameProfile_Click" Margin="0,0,8,8"/>
-                                    <Button Content="删除" Click="DeleteProfile_Click" Margin="0,0,8,8"/>
+                                    <Button Content="删除" Click="DeleteProfile_Click" Margin="0,0,8,8" Style="{StaticResource DangerButton}"/>
                                 </WrapPanel>
-                                <TextBlock x:Name="ProfileStatusText" Foreground="{StaticResource TextSecondary}" Margin="0,0,0,12"/>
+                                <TextBlock x:Name="ProfileStatusText" Foreground="{DynamicResource TextSecondary}" Margin="0,0,0,12"/>
                                 <ListBox x:Name="ProfilesList" Background="Transparent" BorderThickness="0" SelectionChanged="ProfilesList_SelectionChanged">
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
-                                            <Border Background="{StaticResource GlassCardBackground}" BorderBrush="{StaticResource GlassBorder}" BorderThickness="1" CornerRadius="14" Padding="16" Margin="0,0,0,10">
+                                            <Border Background="{DynamicResource GlassCardBackground}" BorderBrush="{DynamicResource GlassBorder}" BorderThickness="1" CornerRadius="10" Padding="16">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                     <StackPanel>
                                                         <TextBlock Text="{Binding Name}" FontSize="18" FontWeight="SemiBold"/>
-                                                        <TextBlock Text="{Binding Bindings}" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,7,0,0"/>
-                                                        <TextBlock Text="{Binding Details}" Foreground="{StaticResource TextSecondary}" Margin="0,5,0,0"/>
+                                                        <TextBlock Text="{Binding Bindings}" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" Margin="0,7,0,0"/>
+                                                        <TextBlock Text="{Binding Details}" Foreground="{DynamicResource TextSecondary}" Margin="0,5,0,0"/>
                                                     </StackPanel>
                                                     <TextBlock Grid.Column="1" Text="{Binding MatchText}" Foreground="{Binding MatchBrush}" FontWeight="SemiBold" Margin="18,2,0,0"/>
                                                 </Grid>
@@ -270,34 +304,46 @@
 
                             <StackPanel x:Name="LogsPanel" Visibility="Collapsed">
                                 <TextBlock Text="运行记录" FontSize="27" FontWeight="SemiBold"/>
-                                <TextBlock Text="仅记录显示器检测、组合匹配、壁纸事务与更新检查" Foreground="{StaticResource TextSecondary}" Margin="0,4,0,18"/>
+                                <TextBlock Text="仅记录显示器检测、组合匹配、壁纸事务与更新检查" Foreground="{DynamicResource TextSecondary}" Margin="0,4,0,18"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
                                     <Button Content="导出只读诊断" Click="ExportDiagnostic_Click"/>
                                     <Button Content="打开日志目录" Click="OpenLogs_Click"/>
                                 </StackPanel>
-                                <ListBox x:Name="LogsList" Background="#78101C32" BorderBrush="{StaticResource GlassBorder}" BorderThickness="1" Padding="8" MinHeight="430"/>
+                                <ListBox x:Name="LogsList" Background="{DynamicResource InputBackground}" BorderBrush="{DynamicResource GlassBorder}" BorderThickness="1" Padding="8" MinHeight="430"/>
                             </StackPanel>
 
                             <StackPanel x:Name="SettingsPanel" Visibility="Collapsed">
                                 <TextBlock Text="设置" FontSize="27" FontWeight="SemiBold"/>
-                                <TextBlock Text="壁纸自动匹配、开机启动、资源占用和更新检查" Foreground="{StaticResource TextSecondary}" Margin="0,4,0,18"/>
+                                <TextBlock Text="外观主题、自动匹配与运行偏好" Foreground="{DynamicResource TextSecondary}" Margin="0,4,0,18"/>
+                                <Border Style="{StaticResource Card}">
+                                    <StackPanel>
+                                        <TextBlock Text="外观主题" FontSize="18" FontWeight="SemiBold"/>
+                                        <TextBlock Text="即时切换，自动保存。所有输入框、下拉菜单和选中项同步配色。" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" Margin="0,6,0,18"/>
+                                        <WrapPanel>
+                                            <RadioButton x:Name="AuroraTheme" GroupName="UiTheme" Tag="Aurora" Content="{x:Static core:AppThemeCatalog.Aurora}" Style="{StaticResource ThemeTile}" Checked="Theme_Checked" AutomationProperties.Name="极光科技主题"/>
+                                            <RadioButton x:Name="GraphiteTheme" GroupName="UiTheme" Tag="Graphite" Content="{x:Static core:AppThemeCatalog.Graphite}" Style="{StaticResource ThemeTile}" Checked="Theme_Checked" AutomationProperties.Name="石墨暗色主题"/>
+                                            <RadioButton x:Name="DaylightTheme" GroupName="UiTheme" Tag="Daylight" Content="{x:Static core:AppThemeCatalog.Daylight}" Style="{StaticResource ThemeTile}" Checked="Theme_Checked" AutomationProperties.Name="云白亮色主题"/>
+                                        </WrapPanel>
+                                        <TextBlock x:Name="ThemeHint" Foreground="{DynamicResource Cyan}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </Border>
                                 <Border Style="{StaticResource Card}">
                                     <StackPanel>
                                         <TextBlock Text="运行方式" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
                                         <CheckBox x:Name="AutoMatchCheck" Content="显示器组合改变后自动匹配并应用壁纸" Click="AutoMatch_Click" Margin="0,5"/>
                                         <CheckBox x:Name="StartupCheck" Content="登录 Windows 后自动启动（保持开启可在开机时恢复壁纸）" Click="Startup_Click" Margin="0,5"/>
                                         <CheckBox x:Name="LowPerformanceCheck" Content="低资源模式（缩小渲染缓存）" Click="LowPerformance_Click" Margin="0,5"/>
-                                        <TextBlock Text="数据目录" Foreground="{StaticResource TextSecondary}" Margin="0,14,0,3"/>
-                                        <TextBlock x:Name="DataPathText" Text="—" Foreground="{StaticResource Cyan}" TextWrapping="Wrap"/>
+                                        <TextBlock Text="数据目录" Foreground="{DynamicResource TextSecondary}" Margin="0,14,0,3"/>
+                                        <TextBlock x:Name="DataPathText" Text="—" Foreground="{DynamicResource Cyan}" TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </Border>
                                 <Border Style="{StaticResource Card}">
                                     <StackPanel>
                                         <TextBlock Text="更新检查" FontSize="18" FontWeight="SemiBold"/>
-                                        <TextBlock Text="只查询官方 GitHub Release；不会自动下载、安装或重启程序" Foreground="{StaticResource TextSecondary}" Margin="0,5,0,12"/>
+                                        <TextBlock Text="只查询官方 GitHub Release；不会自动下载、安装或重启程序" Foreground="{DynamicResource TextSecondary}" Margin="0,5,0,12"/>
                                         <WrapPanel>
                                             <TextBlock Text="当前版本" VerticalAlignment="Center" Margin="0,0,7,0"/>
-                                            <TextBlock x:Name="CurrentVersionText" Text="—" Foreground="{StaticResource Cyan}" VerticalAlignment="Center" Margin="0,0,22,0"/>
+                                            <TextBlock x:Name="CurrentVersionText" Text="—" Foreground="{DynamicResource Cyan}" VerticalAlignment="Center" Margin="0,0,22,0"/>
                                             <TextBlock Text="更新频道" VerticalAlignment="Center" Margin="0,0,7,0"/>
                                             <ComboBox x:Name="UpdateChannelCombo" Width="150" SelectionChanged="UpdateChannel_SelectionChanged">
                                                 <ComboBoxItem Content="Stable" Tag="Stable"/>
@@ -308,26 +354,26 @@
                                         <StackPanel Orientation="Horizontal" Margin="0,14,0,8">
                                             <Button x:Name="CheckUpdatesButton" Content="检查更新" Click="CheckUpdates_Click"/>
                                             <Button x:Name="OpenReleaseButton" Content="打开 Release 页面" Click="OpenRelease_Click"/>
-                                            <TextBlock x:Name="LastUpdateCheckText" Text="上次检查：从未检查" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                            <TextBlock x:Name="LastUpdateCheckText" Text="上次检查：从未检查" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                                         </StackPanel>
-                                        <TextBlock x:Name="UpdateStatusText" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap"/>
-                                        <TextBlock x:Name="UpdateNotesText" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                                        <TextBlock x:Name="UpdateStatusText" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap"/>
+                                        <TextBlock x:Name="UpdateNotesText" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" Margin="0,6,0,0"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
 
                             <StackPanel x:Name="AboutPanel" Visibility="Collapsed">
                                 <TextBlock Text="关于屏序" FontSize="27" FontWeight="SemiBold"/>
-                                <TextBlock Text="一款只专注于多显示器壁纸的 Windows 应用" Foreground="{StaticResource TextSecondary}" Margin="0,4,0,22"/>
+                                <TextBlock Text="一款只专注于多显示器壁纸的 Windows 应用" Foreground="{DynamicResource TextSecondary}" Margin="0,4,0,22"/>
                                 <Border Style="{StaticResource Card}">
                                     <StackPanel>
                                         <TextBlock Text="屏序 SyncWallpaper" FontSize="24" FontWeight="SemiBold"/>
-                                        <TextBlock x:Name="AboutVersionText" Text="—" Foreground="{StaticResource Cyan}" Margin="0,8,0,18"/>
+                                        <TextBlock x:Name="AboutVersionText" Text="—" Foreground="{DynamicResource Cyan}" Margin="0,8,0,18"/>
                                         <TextBlock Text="核心能力" FontSize="16" FontWeight="SemiBold"/>
                                         <TextBlock Text="• 按 EDID 序列号、设备路径和硬件拓扑分层识别显示器&#x0a;• 支持相同型号屏幕与 A/B/C 人工确认&#x0a;• 按显示器组合保存、命名、编辑、删除并自动应用不同壁纸&#x0a;• 保留完整只读显示信息：分辨率、刷新率、HDR、DPI、方向、坐标与接口&#x0a;• Explorer 重启、热插拔、锁屏和睡眠唤醒后自动恢复"
-                                                   Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" LineHeight="25" Margin="0,8,0,0"/>
+                                                   Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" LineHeight="25" Margin="0,8,0,0"/>
                                         <TextBlock Text="本版本不包含显示参数修改、音频、窗口管理、任务栏、屏保、远程或在线壁纸功能。"
-                                                   Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,20,0,0"/>
+                                                   Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" Margin="0,20,0,0"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>

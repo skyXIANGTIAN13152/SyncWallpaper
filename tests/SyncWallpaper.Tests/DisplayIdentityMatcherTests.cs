@@ -33,6 +33,20 @@ public class DisplayIdentityMatcherTests
     }
 
     [TestMethod]
+    public void ReusedPortCannotOverrideAConflictingSerial()
+    {
+        var expected = Monitor("AOC", "B426", "SER-A", "PATH-A", 0);
+        var actual = expected.Clone();
+        actual.EdidSerialNumber = "SER-B";
+
+        var result = new DisplayIdentityMatcher().Match(expected, actual);
+
+        Assert.IsFalse(result.CanAutoApply);
+        Assert.AreEqual(0, result.Score);
+        CollectionAssert.Contains(result.ConflictingFields.ToArray(), "EDID 序列号");
+    }
+
+    [TestMethod]
     public void EmptySerialIdenticalModelsAreAmbiguous()
     {
         var expected = Monitor("AOC", "B426", "0", "", 0);

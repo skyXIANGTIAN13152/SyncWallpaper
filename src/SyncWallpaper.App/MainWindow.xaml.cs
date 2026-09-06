@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _runtime = runtime;
+        UpdateNavigation("Overview");
         _runtime.StateChanged += Runtime_StateChanged;
         Loaded += (_, _) =>
         {
@@ -64,6 +65,16 @@ public partial class MainWindow : Window
         var selectedId = (ProfilesList.SelectedItem as ProfileItem)?.Id ?? _runtime.Settings.EditingProfileId;
 
         StatusBadge.Text = _runtime.StatusText;
+        var statusColor = _runtime.TrayVisualState switch
+        {
+            TrayIconState.Normal => "Success",
+            TrayIconState.Error => "Danger",
+            TrayIconState.Paused => "Warning",
+            _ => "Cyan"
+        };
+        StatusBadge.SetResourceReference(TextBlock.ForegroundProperty, statusColor);
+        StatusDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, statusColor);
+        OverviewStatus.SetResourceReference(TextBlock.ForegroundProperty, statusColor);
         OverviewStatus.Text = _runtime.StatusText;
         MonitorCount.Text = _runtime.Monitors.Count.ToString();
         ProfileName.Text = _runtime.LastMatch?.Profile?.Name ?? "未匹配";
@@ -105,7 +116,11 @@ public partial class MainWindow : Window
         StartupCheck.IsChecked = _runtime.Settings.StartWithWindows;
         LowPerformanceCheck.IsChecked = _runtime.Settings.LowPerformanceMode;
         DataPathText.Text = _runtime.Paths.Root;
-        NebulaGlowTop.Visibility = NebulaGlowBottom.Visibility = _runtime.Settings.LowPerformanceMode ? Visibility.Collapsed : Visibility.Visible;
+        var theme = AppThemeCatalog.Get(_runtime.Settings.UiTheme);
+        AuroraTheme.IsChecked = theme.Id == "Aurora";
+        GraphiteTheme.IsChecked = theme.Id == "Graphite";
+        DaylightTheme.IsChecked = theme.Id == "Daylight";
+        ThemeHint.Text = $"已选择 {theme.Name} · 下次启动继续使用此主题";
 
         CurrentVersionText.Text = _runtime.CurrentVersion;
         AboutVersionText.Text = "版本 " + _runtime.CurrentVersion;
@@ -147,7 +162,7 @@ public partial class MainWindow : Window
             ? "空白组合：尚未添加显示器角色"
             : string.Join(" · ", profile.Roles.Select(role => $"{role.DisplayName} → {WallpaperName(role)}"));
         var details = $"{profile.Roles.Count} 台显示器 · 优先级 {profile.Priority} · 修改于 {profile.ModifiedAt.ToLocalTime():yyyy-MM-dd HH:mm}";
-        return new ProfileItem(profile.Id, profile.Name, bindings, details, matched ? "已匹配" : "未匹配", matched ? System.Windows.Media.Brushes.LawnGreen : System.Windows.Media.Brushes.OrangeRed);
+        return new ProfileItem(profile.Id, profile.Name, bindings, details, matched ? "已匹配" : "未匹配", (System.Windows.Media.Brush)FindResource(matched ? "Success" : "Danger"));
     }
 
     private string WallpaperName(MonitorRoleBinding? binding)
@@ -174,6 +189,37 @@ public partial class MainWindow : Window
             "About" => AboutPanel,
             _ => OverviewPanel
         }).Visibility = Visibility.Visible;
+        UpdateNavigation(tag);
+        PageScroll.ScrollToTop();
+    }
+
+    private void UpdateNavigation(string tag)
+    {
+        foreach (var button in NavigationPanel.Children.OfType<System.Windows.Controls.Button>())
+        {
+            if (string.Equals(button.Tag?.ToString(), tag, StringComparison.Ordinal))
+            {
+                button.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, "SelectionBackground");
+                button.SetResourceReference(System.Windows.Controls.Control.ForegroundProperty, "SelectionText");
+                button.SetResourceReference(System.Windows.Controls.Control.BorderBrushProperty, "Cyan");
+                button.FontWeight = FontWeights.SemiBold;
+            }
+            else
+            {
+                button.ClearValue(System.Windows.Controls.Control.BackgroundProperty);
+                button.ClearValue(System.Windows.Controls.Control.ForegroundProperty);
+                button.ClearValue(System.Windows.Controls.Control.BorderBrushProperty);
+                button.ClearValue(System.Windows.Controls.Control.FontWeightProperty);
+            }
+        }
+    }
+
+    private void Theme_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_refreshing || sender is not System.Windows.Controls.RadioButton { Tag: string id }) return;
+        ThemeManager.Apply(id);
+        _runtime.SetUiTheme(id);
+        Refresh();
     }
 
     private async void Detect_Click(object sender, RoutedEventArgs e)
@@ -201,10 +247,14 @@ public partial class MainWindow : Window
             System.Windows.MessageBox.Show("识别界面未能打开。", "显示器识别");
             return;
         }
-        var assignments = await _roleAssignment.ShowAsync(marks);
+        var assignments = await _roleAssignment.ShowAsync(marks, initialAssignments: _runtime.GetManualDisplayAssignments());
         if (assignments.Count > 0)
         {
-            _runtime.ApplyManualDisplayAssignments(assignments);
+            try { _runtime.ApplyManualDisplayAssignments(assignments); }
+            catch (InvalidOperationException ex)
+            {
+                System.Windows.MessageBox.Show(ex.Message, "保存显示器绑定", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
             Refresh();
         }
     }

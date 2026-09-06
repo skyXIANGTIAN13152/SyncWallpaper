@@ -17,7 +17,16 @@ public sealed class ProfileMatcher
         if (candidates.Count == 0)
             return new MatchResult { Status = MatchStatus.NoMatch, Message = $"当前有 {monitors.Count} 台显示器，没有对应配置" };
 
-        var evaluations = candidates.Select(p => EvaluateProfile(monitors, p))
+        var validCandidates = candidates.Where(p => WallpaperBindingSafety.HasUniqueKeys(p.Roles)).ToList();
+        if (validCandidates.Count == 0)
+            return new MatchResult
+            {
+                Status = MatchStatus.Ambiguous, Profile = candidates[0],
+                IdentityStatus = DisplayIdentityMatchStatus.Ambiguous,
+                Message = "组合包含重复的显示器绑定编号，请重新保存组合。"
+            };
+
+        var evaluations = validCandidates.Select(p => EvaluateProfile(monitors, p))
             .OrderByDescending(x => x.Score)
             .ThenByDescending(x => x.Profile.Priority)
             .ToList();

@@ -8,7 +8,7 @@ namespace SyncWallpaper.Core;
 /// </summary>
 public static class ProfileSchemaMigrator
 {
-    public const int CurrentSchemaVersion = 4;
+    public const int CurrentSchemaVersion = 5;
 
     public static ProfilesDocument Migrate(ProfilesDocument? document, Action<string>? log = null)
     {
@@ -36,15 +36,11 @@ public static class ProfileSchemaMigrator
                     && profile.Roles.Any(x => x.Role.Equals("Portrait", StringComparison.OrdinalIgnoreCase)))
                     profile.Combination = DisplayCombinationKind.ThreeMonitorSetup;
             }
-            var roleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (WallpaperBindingSafety.EnsureUniqueRoleIds(profile.Roles.Where(x => x is not null)))
+                log?.Invoke($"已修复重复或缺失的显示器绑定编号：{profile.Name}");
             foreach (var role in profile.Roles)
             {
                 if (role is null) continue;
-                if (string.IsNullOrWhiteSpace(role.RoleId) || !roleIds.Add(role.RoleId))
-                {
-                    do role.RoleId = Guid.NewGuid().ToString("N");
-                    while (!roleIds.Add(role.RoleId));
-                }
                 if (string.IsNullOrWhiteSpace(role.LastKnownMonitorDevicePath)) role.LastKnownMonitorDevicePath = role.Fingerprint?.MonitorDevicePath ?? string.Empty;
                 role.Fingerprint ??= new MonitorIdentity();
             }

@@ -128,84 +128,64 @@ public sealed class DisplayIdentificationOverlayService
 /// <summary>Non-modal role and wallpaper confirmation shown after the A/B/C overlay.</summary>
 public sealed class DisplayRoleAssignmentService
 {
-    public Task<IReadOnlyList<ManualDisplayAssignment>> ShowAsync(IReadOnlyList<DisplayIdentificationMark> marks, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<ManualDisplayAssignment>> ShowAsync(IReadOnlyList<DisplayIdentificationMark> marks, CancellationToken cancellationToken = default,
+        IReadOnlyList<ManualDisplayAssignment>? initialAssignments = null)
     {
         var dispatcher = System.Windows.Application.Current?.Dispatcher;
         if (dispatcher is null || marks.Count == 0) return Task.FromResult<IReadOnlyList<ManualDisplayAssignment>>(Array.Empty<ManualDisplayAssignment>());
-        return dispatcher.InvokeAsync(() => ShowCore(marks, cancellationToken)).Task.Unwrap();
+        return dispatcher.InvokeAsync(() => ShowCore(marks, cancellationToken, initialAssignments)).Task.Unwrap();
     }
 
-    private static Task<IReadOnlyList<ManualDisplayAssignment>> ShowCore(IReadOnlyList<DisplayIdentificationMark> marks, CancellationToken cancellationToken)
+    private static Task<IReadOnlyList<ManualDisplayAssignment>> ShowCore(IReadOnlyList<DisplayIdentificationMark> marks, CancellationToken cancellationToken,
+        IReadOnlyList<ManualDisplayAssignment>? initialAssignments)
     {
         var tcs = new TaskCompletionSource<IReadOnlyList<ManualDisplayAssignment>>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var window = new Window { Title = "屏序 · 确认逻辑角色与壁纸", Width = 900, Height = 600, MinWidth = 760, MinHeight = 460, WindowStartupLocation = WindowStartupLocation.CenterScreen,
+        var window = new Window { Title = "屏序 · 确认逻辑角色与壁纸", Width = 1020, Height = 600, MinWidth = 820, MinHeight = 460, WindowStartupLocation = WindowStartupLocation.CenterScreen,
             Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(7, 13, 27)), Foreground = WpfBrushes.White, Topmost = true };
+        window.SetResourceReference(Window.BackgroundProperty, "WindowSurface");
+        window.SetResourceReference(Window.ForegroundProperty, "TextPrimary");
         var root = new DockPanel { Margin = new Thickness(20), LastChildFill = false };
-        var heading = new TextBlock { Text = "同型号或无序列号显示器需要手动确认", FontSize = 20, Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(54, 232, 255)), Margin = new Thickness(0, 0, 0, 14) };
+        var heading = new TextBlock { Text = "确认显示器角色与壁纸", FontSize = 20, Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(54, 232, 255)), Margin = new Thickness(0, 0, 0, 14) };
+        heading.SetResourceReference(TextBlock.ForegroundProperty, "Cyan");
         DockPanel.SetDock(heading, Dock.Top); root.Children.Add(heading);
         var rows = new List<(DisplayIdentificationMark Mark, WpfComboBox Role, WpfTextBox Path)>();
         var grid = new Grid(); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(250) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 360 });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 260 });
         AddHeader(grid, 0, 0, "屏幕"); AddHeader(grid, 0, 1, "稳定身份"); AddHeader(grid, 0, 2, "逻辑角色"); AddHeader(grid, 0, 3, "壁纸路径");
-        var inputForeground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(10, 25, 42));
-        var inputBackground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(250, 253, 255));
-        var comboItemStyle = new Style(typeof(System.Windows.Controls.ComboBoxItem));
-        comboItemStyle.Setters.Add(new Setter(System.Windows.Controls.Control.ForegroundProperty, inputForeground));
-        comboItemStyle.Setters.Add(new Setter(System.Windows.Controls.Control.BackgroundProperty, inputBackground));
-        comboItemStyle.Setters.Add(new Setter(System.Windows.Controls.Control.PaddingProperty, new Thickness(8, 5, 8, 5)));
-        comboItemStyle.Setters.Add(new Setter(System.Windows.Controls.Control.FontSizeProperty, 14d));
-        comboItemStyle.Setters.Add(new Setter(System.Windows.Documents.TextElement.ForegroundProperty, inputForeground));
-        var comboItemSelected = new Trigger { Property = System.Windows.Controls.ComboBoxItem.IsSelectedProperty, Value = true };
-        comboItemSelected.Setters.Add(new Setter(System.Windows.Controls.Control.ForegroundProperty, inputForeground));
-        comboItemSelected.Setters.Add(new Setter(System.Windows.Documents.TextElement.ForegroundProperty, inputForeground));
-        comboItemSelected.Setters.Add(new Setter(System.Windows.Controls.Control.BackgroundProperty, new SolidColorBrush(System.Windows.Media.Color.FromRgb(184, 225, 245))));
-        comboItemStyle.Triggers.Add(comboItemSelected);
-        var comboTemplate = new DataTemplate { VisualTree = new FrameworkElementFactory(typeof(TextBlock)) };
-        comboTemplate.VisualTree.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding());
-        comboTemplate.VisualTree.SetValue(TextBlock.ForegroundProperty, inputForeground);
-        comboTemplate.VisualTree.SetValue(TextBlock.FontSizeProperty, 14d);
-        comboTemplate.VisualTree.SetValue(TextBlock.MarginProperty, new Thickness(2, 1, 2, 1));
         for (var i = 0; i < marks.Count; i++)
         {
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var mark = marks[i];
-            var defaultRole = mark.IsInternal ? "Laptop" : mark.Width >= mark.Height ? "Landscape" : "Portrait";
+            var initial = initialAssignments?.FirstOrDefault(x => !string.IsNullOrWhiteSpace(mark.MonitorDevicePath)
+                && x.MonitorDevicePath.Equals(mark.MonitorDevicePath, StringComparison.OrdinalIgnoreCase));
+            var defaultRole = initial?.Role ?? (mark.IsInternal ? "Laptop" : mark.Width >= mark.Height ? "Landscape" : "Portrait");
             var role = new WpfComboBox
             {
-                ItemsSource = new[] { "Laptop", "Landscape", "Portrait", "Custom" },
-                SelectedIndex = defaultRole switch { "Laptop" => 0, "Landscape" => 1, "Portrait" => 2, _ => 3 },
+                ItemsSource = new[] { "Laptop", "Landscape", "Portrait", "Custom", defaultRole }.Distinct().ToArray(),
+                SelectedItem = defaultRole,
                 Margin = new Thickness(4),
-                Foreground = inputForeground,
-                Background = inputBackground,
-                BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(94, 137, 170)),
                 FontSize = 14,
-                ItemContainerStyle = comboItemStyle,
-                ItemTemplate = comboTemplate,
                 ToolTip = "选择逻辑角色"
             };
-            role.Resources[System.Windows.SystemColors.ControlTextBrushKey] = inputForeground;
-            role.Resources[System.Windows.SystemColors.WindowTextBrushKey] = inputForeground;
-            role.Resources[System.Windows.SystemColors.HighlightTextBrushKey] = inputForeground;
             var path = new WpfTextBox
             {
-                Margin = new Thickness(4), MinWidth = 250, FontSize = 14,
-                Foreground = inputForeground, Background = inputBackground,
-                BorderBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(94, 137, 170)),
-                CaretBrush = inputForeground,
-                ToolTip = "选择或输入壁纸文件路径"
+                Text = initial?.WallpaperPath ?? string.Empty,
+                Margin = new Thickness(4), MinWidth = 100, FontSize = 14,
+                ToolTip = "未重新选择时保留该显示器已保存壁纸；清除壁纸请使用组合编辑器"
             };
-            var browse = new System.Windows.Controls.Button { Content = "选择…", Margin = new Thickness(4), Padding = new Thickness(10, 5, 10, 5), Foreground = WpfBrushes.White, Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(20, 65, 98)) };
+            var browse = new System.Windows.Controls.Button { Content = "选择…", Margin = new Thickness(4), Padding = new Thickness(10, 5, 10, 5) };
             browse.Click += (_, _) => { var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "图片|*.jpg;*.jpeg;*.png;*.bmp" }; if (dialog.ShowDialog() == true) path.Text = dialog.FileName; };
-            var pathPanel = new StackPanel { Orientation = WpfOrientation.Horizontal }; pathPanel.Children.Add(path); pathPanel.Children.Add(browse);
+            var pathPanel = new DockPanel(); DockPanel.SetDock(browse, Dock.Right); pathPanel.Children.Add(browse); pathPanel.Children.Add(path);
             AddCell(grid, i + 1, 0, new TextBlock { Text = mark.Label, FontSize = 20, Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(54, 232, 255)), Margin = new Thickness(4) });
             AddCell(grid, i + 1, 1, new TextBlock { Text = string.IsNullOrWhiteSpace(mark.StableId) ? "（无稳定 ID）" : MonitorIdentitySanitizer.Redact(mark.StableId), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(4), Foreground = WpfBrushes.LightGray, ToolTip = "稳定身份已脱敏" });
             AddCell(grid, i + 1, 2, role); AddCell(grid, i + 1, 3, pathPanel); rows.Add((mark, role, path));
         }
-        var content = new ScrollViewer { Content = grid, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var content = new ScrollViewer { Content = grid, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto };
         DockPanel.SetDock(content, Dock.Top); root.Children.Add(content);
         var buttons = new StackPanel { Orientation = WpfOrientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 16, 0, 0) };
         var save = new System.Windows.Controls.Button { Content = "保存绑定", Padding = new Thickness(18, 8, 18, 8), Margin = new Thickness(6) };
         var cancel = new System.Windows.Controls.Button { Content = "取消", Padding = new Thickness(18, 8, 18, 8), Margin = new Thickness(6) };
+        save.SetResourceReference(FrameworkElement.StyleProperty, "PrimaryButton");
         buttons.Children.Add(cancel); buttons.Children.Add(save); DockPanel.SetDock(buttons, Dock.Bottom); root.Children.Add(buttons); window.Content = root;
         var finished = false;
         void Finish(IReadOnlyList<ManualDisplayAssignment> value) { if (finished) return; finished = true; tcs.TrySetResult(value); if (window.IsVisible) window.Close(); }
@@ -219,5 +199,5 @@ public sealed class DisplayRoleAssignmentService
     }
 
     private static void AddHeader(Grid grid, int row, int column, string text) => AddCell(grid, row, column, new TextBlock { Text = text, Foreground = WpfBrushes.LightGray, Margin = new Thickness(4, 4, 4, 8) });
-    private static void AddCell(Grid grid, int row, int column, UIElement element) { Grid.SetRow(element, row); Grid.SetColumn(element, column); grid.Children.Add(element); }
+    private static void AddCell(Grid grid, int row, int column, UIElement element) { Grid.SetRow(element, row); Grid.SetColumn(element, column); grid.Children.Add(element); if (element is TextBlock text) text.SetResourceReference(TextBlock.ForegroundProperty, column == 0 && row > 0 ? "Cyan" : "TextSecondary"); }
 }

@@ -71,7 +71,7 @@ public sealed class MonitorIdentity
 
 public sealed class MonitorRoleBinding
 {
-    public int SchemaVersion { get; set; } = 4;
+    public int SchemaVersion { get; set; } = 5;
     public string RoleId { get; set; } = Guid.NewGuid().ToString("N");
     public string Role { get; set; } = "Laptop";
     public string DisplayName { get; set; } = "笔记本本体";
@@ -84,12 +84,19 @@ public sealed class MonitorRoleBinding
     public DateTime? LastSuccessfulMatchAt { get; set; }
     public string LastKnownMonitorDevicePath { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
+
+    public MonitorRoleBinding Clone()
+    {
+        var copy = (MonitorRoleBinding)MemberwiseClone();
+        copy.Fingerprint = Fingerprint.Clone();
+        return copy;
+    }
 }
 
 public sealed class WallpaperProfile
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public int SchemaVersion { get; set; } = 4;
+    public int SchemaVersion { get; set; } = 5;
     public string Name { get; set; } = string.Empty;
     public DisplayCombinationKind Combination { get; set; } = DisplayCombinationKind.Custom;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -124,7 +131,8 @@ public sealed class WallpaperAsset
 
 public sealed class AppSettings
 {
-    public int SchemaVersion { get; set; } = 3;
+    public int SchemaVersion { get; set; } = 4;
+    public string UiTheme { get; set; } = AppThemeCatalog.DefaultId;
     public bool AutoMatchEnabled { get; set; } = true;
     public bool StartWithWindows { get; set; } = false;
     public bool LowPerformanceMode { get; set; } = true;
@@ -154,7 +162,7 @@ public sealed class LibraryDocument
 
 public sealed class ProfilesDocument
 {
-    public int SchemaVersion { get; set; } = 4;
+    public int SchemaVersion { get; set; } = 5;
     public List<WallpaperProfile> Profiles { get; set; } = new();
 }
 

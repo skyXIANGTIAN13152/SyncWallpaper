@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.1.0-beta.2 — 2026-09-06
+
+- Add Aurora technology, Graphite dark and Daylight light themes with instant switching and a persisted appearance preference.
+- Replace native mixed-color input, dropdown, checkbox and selection surfaces with shared theme-aware templates; retain text contrast in selected, focused and disabled states.
+- Use opaque reading surfaces, restrained accent colors, active navigation and consistent spacing while retaining transparent outer window corners.
+- Add automated palette contrast, preference migration and live WPF control-theme regression checks.
+- Prevent compact text inputs from applying padding twice; regression checks cover complete Chinese glyphs at 100%, 125%, 150% and 200% layout scales.
+- Keep Chinese and English update checks within their own release edition, and publish verified packages through draft releases before public promotion.
+
+- Preserve per-device binding IDs and wallpapers when several monitors share a logical role such as Portrait, including repeated manual identification and changed enumeration order.
+- Repair duplicate binding IDs in saved profiles and retain existing file selections when reopening identification or profile editing.
+- Reject duplicate target devices before applying, preflight every source image, and verify the complete distinct-monitor set before reporting success.
+- Refresh monitor discovery before manual reapply and reject conflicting reliable EDID serials even when a connection path is reused.
+- Add regression coverage for all 24 four-screen orderings, duplicate bindings, repeated application, incomplete profiles and final wallpaper verification.
+
 ## 1.1.0-beta.1 — 2026-08-25
 
 - Refocused SyncWallpaper exclusively on multi-monitor wallpaper identification, profiles, matching and recovery.

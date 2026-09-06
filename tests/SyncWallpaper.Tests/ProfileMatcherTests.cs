@@ -64,6 +64,23 @@ public class ProfileMatcherTests
     }
 
     [TestMethod]
+    public void FourScreensWithDuplicateBindingIds_NeverReportAnApplicableMatch()
+    {
+        var laptop = Monitor("TMA", "0803", "0", "LAPTOP", 0, true);
+        var asus = Monitor("AUS", "2704", "ASUS-SERIAL", "ASUS", 1);
+        var aoc = Monitor("AOC", "B426", "AOC-SERIAL", "AOC", 2);
+        var samsung = Monitor("SAM", "71D9", "SAMSUNG-SERIAL", "SAMSUNG", 3);
+        var profile = Profile("四屏", ("Laptop", laptop), ("Portrait", asus), ("Landscape", aoc), ("Portrait", samsung));
+        profile.Roles[3].RoleId = profile.Roles[1].RoleId;
+
+        var result = new ProfileMatcher().Match(new[] { samsung, aoc, laptop, asus }, new[] { profile });
+
+        Assert.IsFalse(result.CanAutoApply, "重复绑定编号不能被当作四台屏幕的有效映射。");
+        Assert.AreEqual(MatchStatus.Ambiguous, result.Status);
+        Assert.AreEqual(0, result.RoleMatches.Count);
+    }
+
+    [TestMethod]
     public void WindowsTemporaryNumbersAreNotUsed()
     {
         var first = Monitor("A", "1", "S1", "PATH", 0); first.SourceId = 99; first.TargetId = 99;

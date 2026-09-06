@@ -70,7 +70,11 @@ public sealed class GitHubReleaseChecker : IReleaseUpdateChecker
             var parsedResponse = ParseReleases(json, channel);
             if (parsedResponse.InvalidUrl)
                 return Result(UpdateCheckStatus.InvalidResponse, current, null, "暂时无法检查更新，请稍后重试。", "Release html_url 未通过 GitHub URL 校验。", started);
-            var candidate = ReleaseVersionComparer.SelectHighest(parsedResponse.Releases, channel);
+            // Language suffixes are separate distributions, not newer feature builds.
+            // Never send the Chinese edition to an English-only package or vice versa.
+            var englishEdition = IsEnglishEdition(_currentVersionText);
+            var candidate = ReleaseVersionComparer.SelectHighest(
+                parsedResponse.Releases.Where(release => IsEnglishEdition(release.TagName) == englishEdition), channel);
             if (candidate is null)
                 return Result(UpdateCheckStatus.NoEligibleRelease, current, null, "没有符合当前更新渠道的版本。", "没有可用的非草稿 Release。", started);
             if (!SemanticVersion.TryParse(candidate.TagName, out var latest))
@@ -124,6 +128,9 @@ public sealed class GitHubReleaseChecker : IReleaseUpdateChecker
             CurrentSemanticVersion = current,
             LatestSemanticVersion = latest
         };
+
+    private static bool IsEnglishEdition(string version)
+        => version.Split('+', 2)[0].Trim().EndsWith("-en", StringComparison.OrdinalIgnoreCase);
 
     private (IReadOnlyList<GitHubRelease> Releases, bool InvalidUrl) ParseReleases(string json, UpdateChannel channel)
     {

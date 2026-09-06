@@ -88,6 +88,13 @@ public sealed class DisplayIdentityMatcher
         var reasons = new List<string>();
         var conflicts = FindConflicts(expected, actual);
 
+        // A port can be reused by another physical display. Positive path or
+        // topology evidence cannot override contradictory reliable serials.
+        if (expected.HasUsableSerial && actual.HasUsableSerial
+            && !string.Equals(expected.SerialKey, actual.SerialKey, StringComparison.OrdinalIgnoreCase))
+            return new(DisplayIdentityMatchStatus.Unknown, 0, "EDID 序列号冲突",
+                new[] { "可靠序列号不同，不能因接口相同而视为同一台显示器" }, conflicts);
+
         if (!string.IsNullOrWhiteSpace(expected.StableId)
             && !string.IsNullOrWhiteSpace(actual.StableId)
             && string.Equals(expected.StableId, actual.StableId, StringComparison.OrdinalIgnoreCase)

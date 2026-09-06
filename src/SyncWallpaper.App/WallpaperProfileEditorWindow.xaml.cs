@@ -27,9 +27,15 @@ public partial class WallpaperProfileEditorWindow : Window
         _wallpaperChoices = new[] { new WallpaperChoice(string.Empty, "不选择壁纸") }
             .Concat(runtime.Library.Assets.Where(x => !x.IsMissing).OrderBy(x => x.DisplayName, StringComparer.CurrentCultureIgnoreCase)
                 .Select(x => new WallpaperChoice(x.Id, x.DisplayName)))
+            .Concat(profile.Roles.Where(x => string.IsNullOrWhiteSpace(x.WallpaperAssetId) && !string.IsNullOrWhiteSpace(x.WallpaperPath))
+                .Select(x => new WallpaperChoice("path:" + x.WallpaperPath, System.IO.Path.GetFileName(x.WallpaperPath) + "（已保存文件）", x.WallpaperPath)))
+            .DistinctBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
             .ToArray();
         foreach (var role in profile.Roles)
-            _rows.Add(CreateRow(role.RoleId, role.Role, MonitorKey(role.Fingerprint), role.WallpaperAssetId, role.FitMode, role.BackgroundColor));
+            _rows.Add(CreateRow(role.RoleId, role.Role, MonitorKey(role.Fingerprint),
+                !string.IsNullOrWhiteSpace(role.WallpaperAssetId) ? role.WallpaperAssetId
+                    : string.IsNullOrWhiteSpace(role.WallpaperPath) ? string.Empty : "path:" + role.WallpaperPath,
+                role.FitMode, role.BackgroundColor));
         RoleItems.ItemsSource = _rows;
         RefreshHint();
     }
@@ -93,13 +99,15 @@ public partial class WallpaperProfileEditorWindow : Window
                 Roles = _rows.Select(row =>
                 {
                     var monitor = _monitorChoices.FirstOrDefault(x => x.Key.Equals(row.SelectedMonitorKey ?? string.Empty, StringComparison.OrdinalIgnoreCase));
+                    var wallpaper = _wallpaperChoices.FirstOrDefault(x => x.Id.Equals(row.SelectedWallpaperId, StringComparison.OrdinalIgnoreCase));
                     return new WallpaperRoleEditDraft
                     {
                         RoleId = row.RoleId,
                         Role = row.Role,
                         DisplayName = row.Role,
                         Fingerprint = monitor?.Fingerprint?.Clone(),
-                        WallpaperAssetId = row.SelectedWallpaperId ?? string.Empty,
+                        WallpaperAssetId = string.IsNullOrEmpty(wallpaper?.ExternalPath) ? row.SelectedWallpaperId ?? string.Empty : string.Empty,
+                        WallpaperPath = wallpaper?.ExternalPath ?? string.Empty,
                         FitMode = row.FitMode,
                         BackgroundColor = row.BackgroundColor
                     };
@@ -170,7 +178,7 @@ public partial class WallpaperProfileEditorWindow : Window
     private void Cancel_Click(object sender, RoutedEventArgs e) => Close();
 
     private sealed record MonitorChoice(string Key, string Label, MonitorIdentity? Fingerprint);
-    private sealed record WallpaperChoice(string Id, string Label);
+    private sealed record WallpaperChoice(string Id, string Label, string ExternalPath = "");
     private sealed record FitChoice(WallpaperFitMode Value, string Label);
     private sealed class RoleRow
     {

@@ -25,6 +25,7 @@ foreach ($entry in $projects.GetEnumerator()) {
     $destination = Join-Path $output $entry.Key
     New-Item -ItemType Directory -Force -Path $destination | Out-Null
     & $dotnet publish (Join-Path $PSScriptRoot $entry.Value) -c Release -r win-x64 --self-contained $selfContainedValue -p:DebugType=None -p:DebugSymbols=false -o $destination
+    if ($LASTEXITCODE -ne 0) { throw "Publish failed for $($entry.Key)." }
 }
 
 Copy-Item (Join-Path $PSScriptRoot "README.md"), (Join-Path $PSScriptRoot "LICENSE"), (Join-Path $PSScriptRoot "CHANGELOG.md"), (Join-Path $PSScriptRoot "THIRD-PARTY-NOTICES.md") $output -Force
@@ -38,9 +39,10 @@ $packagedReport = Join-Path $output "docs\RELEASE-REPORT.md"
 if (Test-Path -LiteralPath $packagedReport) { Remove-Item -LiteralPath $packagedReport -Force }
 
 $manifest = [ordered]@{
-    product = "屏序 SyncWallpaper"
+    product = [string]$props.Project.PropertyGroup.Product
     version = $version
-    releaseChannel = "Stable"
+    releaseChannel = $(if ($version.Contains("-")) { "Beta" } else { "Stable" })
+    language = $(if ($version.EndsWith("-en")) { "en" } else { "zh-CN" })
     rid = "win-x64"
     selfContained = [bool]$SelfContained
     layout = "App/ Diagnostics/"
@@ -53,6 +55,9 @@ $manifest = [ordered]@{
     systemMutationDefault = $false
     signed = $false
     releaseLabel = "Unsigned Wallpaper-Only Beta"
+}
+if (Get-ChildItem -LiteralPath $output -Recurse -File | Where-Object { $_.FullName -match '[\\/](Config|Wallpapers|Logs|Cache|Backups|Deleted)[\\/]' -or $_.Name -match '(?i)(secret|credential|\.bak$|\.pdb$)' }) {
+    throw "A private or development-only file was found in the package."
 }
 $manifest | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $output "package-manifest.json") -Encoding UTF8
 

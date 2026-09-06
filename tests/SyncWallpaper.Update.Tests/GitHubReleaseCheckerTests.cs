@@ -134,6 +134,23 @@ public sealed class GitHubReleaseCheckerTests
         Assert.IsFalse(UpdateCheckScheduler.ShouldRunAutomaticCheck(settings, DateTimeOffset.Parse("2025-12-01T00:00:00Z")));
     }
 
+    [DataTestMethod]
+    [DataRow("1.1.0-beta.1", "1.1.0-beta.2")]
+    [DataRow("1.1.0-beta.1-en", "1.1.0-beta.2-en")]
+    [DataRow("1.1.0-beta.1-en+commit123", "1.1.0-beta.2-en")]
+    public async Task ParallelEditionsOnlyOfferTheirOwnLanguage(string current, string expected)
+    {
+        using var client = CreateClient("""
+            [
+              {"tag_name":"v1.1.0-beta.2","name":"Chinese","html_url":"https://github.com/owner/syncwallpaper/releases/tag/v1.1.0-beta.2","draft":false,"prerelease":true},
+              {"tag_name":"v1.1.0-beta.2-en","name":"English","html_url":"https://github.com/owner/syncwallpaper/releases/tag/v1.1.0-beta.2-en","draft":false,"prerelease":true}
+            ]
+            """);
+        var result = await new GitHubReleaseChecker(client, Repository, current).CheckAsync(UpdateChannel.Beta, CancellationToken.None);
+        Assert.AreEqual(UpdateCheckStatus.UpdateAvailable, result.Status);
+        Assert.AreEqual(expected, result.LatestSemanticVersion?.ToString());
+    }
+
     private static HttpClient CreateClient(string body, HttpStatusCode status = HttpStatusCode.OK, IReadOnlyDictionary<string, string>? headers = null)
         => new(new DelegateHandler((_, _) => Task.FromResult(JsonResponse(body, status, headers))));
 

@@ -51,7 +51,7 @@ public class StorageTests
         var changed = AppSettingsMigrator.Migrate(settings);
 
         Assert.IsTrue(changed);
-        Assert.AreEqual(3, settings.SchemaVersion);
+        Assert.AreEqual(AppSettingsMigrator.CurrentSchemaVersion, settings.SchemaVersion);
         Assert.AreEqual("legacy-profile", settings.EditingProfileId);
         Assert.IsNull(settings.LastMatchedProfileId);
         Assert.IsNull(settings.ActiveProfileId);

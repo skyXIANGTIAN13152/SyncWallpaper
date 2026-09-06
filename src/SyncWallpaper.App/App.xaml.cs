@@ -28,6 +28,7 @@ public partial class App : System.Windows.Application
         }
 
         _runtime = new AppRuntime();
+        ThemeManager.Apply(_runtime.Settings.UiTheme);
         _runtime.StateChanged += (_, _) => Dispatcher.InvokeAsync(UpdateTray);
         _trayState = _runtime.TrayVisualState;
         _tray = new NotifyIcon

@@ -27,6 +27,23 @@ public class ProfileSchemaMigrationTests
     }
 
     [TestMethod]
+    public void VersionFourDuplicateBindingsAreUpgradedAndKeepWallpaperReferences()
+    {
+        var profile = new WallpaperProfile { SchemaVersion = 4, Roles = new()
+        {
+            new() { RoleId = "duplicate", Role = "Portrait", WallpaperPath = "a.png", Fingerprint = TestData.Monitor("A", "SER-A") },
+            new() { RoleId = "duplicate", Role = "Portrait", WallpaperPath = "b.png", Fingerprint = TestData.Monitor("B", "SER-B") }
+        }};
+        var messages = new List<string>();
+        var document = ProfileSchemaMigrator.Migrate(new ProfilesDocument { SchemaVersion = 4, Profiles = new() { profile } }, messages.Add);
+
+        Assert.AreEqual(ProfileSchemaMigrator.CurrentSchemaVersion, document.SchemaVersion);
+        Assert.AreNotEqual(profile.Roles[0].RoleId, profile.Roles[1].RoleId);
+        CollectionAssert.AreEqual(new[] { "a.png", "b.png" }, profile.Roles.Select(x => x.WallpaperPath).ToArray());
+        Assert.IsTrue(messages.Any(x => x.Contains("绑定编号")));
+    }
+
+    [TestMethod]
     public void VersionOneProfileMigratesWithoutDroppingRoleOrWallpaperAsset()
     {
         var fingerprint = new MonitorIdentity { MonitorDevicePath = "PATH-A", ManufacturerName = "AOC", ProductCodeId = "B426", EdidSerialNumber = "SER-A" };

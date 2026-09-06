@@ -54,14 +54,12 @@ public static class WallpaperProfileEditingService
         draft.Roles ??= new List<WallpaperRoleEditDraft>();
         if (draft.Roles.Count > 8) throw new InvalidOperationException("一套组合最多支持 8 个逻辑角色。");
 
-        var roleNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var monitorKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var roles = new List<MonitorRoleBinding>();
         foreach (var item in draft.Roles)
         {
             var roleName = item.Role?.Trim();
             if (string.IsNullOrWhiteSpace(roleName)) throw new InvalidOperationException("每个显示器都需要逻辑角色名称。");
-            if (!roleNames.Add(roleName)) throw new InvalidOperationException($"逻辑角色“{roleName}”重复。");
             if (item.Fingerprint is null) throw new InvalidOperationException($"逻辑角色“{roleName}”尚未选择显示器。");
             var monitorKey = StrongMonitorKey(item.Fingerprint);
             if (string.IsNullOrWhiteSpace(monitorKey))
@@ -83,6 +81,7 @@ public static class WallpaperProfileEditingService
             });
         }
 
+        WallpaperBindingSafety.EnsureUniqueRoleIds(roles);
         profile.Name = name;
         profile.Enabled = draft.Enabled;
         profile.AutoApply = WallpaperProfileApplyPolicy.IsComplete(roles);
