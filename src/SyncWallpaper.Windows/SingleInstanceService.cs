@@ -31,7 +31,7 @@ public sealed class SingleInstanceService : IDisposable
     {
         ArgumentNullException.ThrowIfNull(activate);
         if (!_ownsMutex || _activationEvent is null)
-            throw new InvalidOperationException("只有主实例可以监听激活请求。");
+        throw new InvalidOperationException("Only the primary instance can listen for activation requests.");
 
         _activationRegistration?.Unregister(null);
         _activationRegistration = ThreadPool.RegisterWaitForSingleObject(

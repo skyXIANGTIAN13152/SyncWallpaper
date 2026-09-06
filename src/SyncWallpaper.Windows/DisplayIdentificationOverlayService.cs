@@ -140,18 +140,18 @@ public sealed class DisplayRoleAssignmentService
         IReadOnlyList<ManualDisplayAssignment>? initialAssignments)
     {
         var tcs = new TaskCompletionSource<IReadOnlyList<ManualDisplayAssignment>>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var window = new Window { Title = "屏序 · 确认逻辑角色与壁纸", Width = 1020, Height = 600, MinWidth = 820, MinHeight = 460, WindowStartupLocation = WindowStartupLocation.CenterScreen,
+        var window = new Window { Title = "SyncWallpaper · Confirm monitor roles and wallpapers", Width = 1020, Height = 600, MinWidth = 820, MinHeight = 460, WindowStartupLocation = WindowStartupLocation.CenterScreen,
             Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(7, 13, 27)), Foreground = WpfBrushes.White, Topmost = true };
         window.SetResourceReference(Window.BackgroundProperty, "WindowSurface");
         window.SetResourceReference(Window.ForegroundProperty, "TextPrimary");
         var root = new DockPanel { Margin = new Thickness(20), LastChildFill = false };
-        var heading = new TextBlock { Text = "确认显示器角色与壁纸", FontSize = 20, Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(54, 232, 255)), Margin = new Thickness(0, 0, 0, 14) };
+        var heading = new TextBlock { Text = "Confirm monitor roles and wallpapers", FontSize = 20, Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(54, 232, 255)), Margin = new Thickness(0, 0, 0, 14) };
         heading.SetResourceReference(TextBlock.ForegroundProperty, "Cyan");
         DockPanel.SetDock(heading, Dock.Top); root.Children.Add(heading);
         var rows = new List<(DisplayIdentificationMark Mark, WpfComboBox Role, WpfTextBox Path)>();
         var grid = new Grid(); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 260 });
-        AddHeader(grid, 0, 0, "屏幕"); AddHeader(grid, 0, 1, "稳定身份"); AddHeader(grid, 0, 2, "逻辑角色"); AddHeader(grid, 0, 3, "壁纸路径");
+        AddHeader(grid, 0, 0, "Monitor"); AddHeader(grid, 0, 1, "Stable identity"); AddHeader(grid, 0, 2, "Logical role"); AddHeader(grid, 0, 3, "Wallpaper path");
         for (var i = 0; i < marks.Count; i++)
         {
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -165,26 +165,26 @@ public sealed class DisplayRoleAssignmentService
                 SelectedItem = defaultRole,
                 Margin = new Thickness(4),
                 FontSize = 14,
-                ToolTip = "选择逻辑角色"
+                ToolTip = "Select a logical role"
             };
             var path = new WpfTextBox
             {
                 Text = initial?.WallpaperPath ?? string.Empty,
                 Margin = new Thickness(4), MinWidth = 100, FontSize = 14,
-                ToolTip = "未重新选择时保留该显示器已保存壁纸；清除壁纸请使用组合编辑器"
+                ToolTip = "Keep the saved wallpaper unless a new one is selected. To clear it, use the profile editor."
             };
-            var browse = new System.Windows.Controls.Button { Content = "选择…", Margin = new Thickness(4), Padding = new Thickness(10, 5, 10, 5) };
-            browse.Click += (_, _) => { var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "图片|*.jpg;*.jpeg;*.png;*.bmp" }; if (dialog.ShowDialog() == true) path.Text = dialog.FileName; };
+            var browse = new System.Windows.Controls.Button { Content = "Browse…", Margin = new Thickness(4), Padding = new Thickness(10, 5, 10, 5) };
+            browse.Click += (_, _) => { var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Images|*.jpg;*.jpeg;*.png;*.bmp" }; if (dialog.ShowDialog() == true) path.Text = dialog.FileName; };
             var pathPanel = new DockPanel(); DockPanel.SetDock(browse, Dock.Right); pathPanel.Children.Add(browse); pathPanel.Children.Add(path);
             AddCell(grid, i + 1, 0, new TextBlock { Text = mark.Label, FontSize = 20, Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(54, 232, 255)), Margin = new Thickness(4) });
-            AddCell(grid, i + 1, 1, new TextBlock { Text = string.IsNullOrWhiteSpace(mark.StableId) ? "（无稳定 ID）" : MonitorIdentitySanitizer.Redact(mark.StableId), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(4), Foreground = WpfBrushes.LightGray, ToolTip = "稳定身份已脱敏" });
+            AddCell(grid, i + 1, 1, new TextBlock { Text = string.IsNullOrWhiteSpace(mark.StableId) ? "(no stable ID)" : MonitorIdentitySanitizer.Redact(mark.StableId), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(4), Foreground = WpfBrushes.LightGray, ToolTip = "Stable identity is redacted" });
             AddCell(grid, i + 1, 2, role); AddCell(grid, i + 1, 3, pathPanel); rows.Add((mark, role, path));
         }
         var content = new ScrollViewer { Content = grid, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto };
         DockPanel.SetDock(content, Dock.Top); root.Children.Add(content);
         var buttons = new StackPanel { Orientation = WpfOrientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 16, 0, 0) };
-        var save = new System.Windows.Controls.Button { Content = "保存绑定", Padding = new Thickness(18, 8, 18, 8), Margin = new Thickness(6) };
-        var cancel = new System.Windows.Controls.Button { Content = "取消", Padding = new Thickness(18, 8, 18, 8), Margin = new Thickness(6) };
+        var save = new System.Windows.Controls.Button { Content = "Save bindings", Padding = new Thickness(18, 8, 18, 8), Margin = new Thickness(6) };
+        var cancel = new System.Windows.Controls.Button { Content = "Cancel", Padding = new Thickness(18, 8, 18, 8), Margin = new Thickness(6) };
         save.SetResourceReference(FrameworkElement.StyleProperty, "PrimaryButton");
         buttons.Children.Add(cancel); buttons.Children.Add(save); DockPanel.SetDock(buttons, Dock.Bottom); root.Children.Add(buttons); window.Content = root;
         var finished = false;

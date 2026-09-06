@@ -1,9 +1,9 @@
-# 隐私
+# Privacy
 
-屏序没有遥测、分析、广告、远程控制或在线壁纸提供器，默认不联网。
+SyncWallpaper has no telemetry, analytics, advertising, remote control or online wallpaper provider and is offline by default.
 
-只有用户手动点击“检查更新”或主动开启每周检查时，程序才会访问公开 GitHub Releases API。它不会上传显示器身份、序列号、设备路径、壁纸、配置、日志、用户 ID 或设备指纹，也不会下载 Release asset。
+The application contacts the public GitHub Releases API only when the user clicks **Check for updates** or enables weekly checks. It does not upload monitor identity, serials, device paths, wallpapers, configuration, logs, user IDs or device fingerprints, and it does not download Release assets.
 
-配置、壁纸、缓存和日志保存在设置页显示的数据目录。日志会脱敏用户目录；导出的显示器报告对硬件身份字段使用一致性哈希。分享诊断文件前仍应人工检查内容。
+Configuration, wallpapers, cache and logs remain in the data folder shown in Settings. Logs redact user directories; exported monitor reports use consistent hashes for hardware identity fields. Review diagnostic files before sharing them.
 
-程序不请求管理员权限，只管理自身当前用户启动项，不修改其他软件或系统服务。
+The application does not request administrator rights. It manages only its own current-user startup entry and does not modify other software or system services.

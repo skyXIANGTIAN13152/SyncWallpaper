@@ -5,7 +5,7 @@ $dotnet = Join-Path $PSScriptRoot "work\dotnet-sdk\dotnet.exe"
 if (-not (Test-Path -LiteralPath $dotnet)) { $dotnet = "dotnet" }
 $props = [xml](Get-Content -LiteralPath (Join-Path $PSScriptRoot "Directory.Build.props") -Raw)
 $version = [string]$props.Project.PropertyGroup.Version
-if ([string]::IsNullOrWhiteSpace($version)) { throw "Directory.Build.props 中缺少 Version。" }
+if ([string]::IsNullOrWhiteSpace($version)) { throw "Directory.Build.props is missing Version." }
 $outputName = if ($SelfContained) { "win-x64-selfcontained" } else { "win-x64" }
 $output = Join-Path $PSScriptRoot ("artifacts\publish\" + $outputName)
 $publishRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "artifacts\publish"))
@@ -69,7 +69,7 @@ Compress-Archive -Path (Join-Path $output "*") -DestinationPath $zipPath -Compre
 $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
 Set-Content -LiteralPath $hashPath -Value ($hash + "  " + (Split-Path $zipPath -Leaf)) -Encoding ASCII
 
-if (Get-ChildItem -Path $output -Recurse -File -Filter "*Updater*.exe" -ErrorAction SilentlyContinue) { throw "发布目录意外包含 Updater.exe。" }
+if (Get-ChildItem -Path $output -Recurse -File -Filter "*Updater*.exe" -ErrorAction SilentlyContinue) { throw "The package unexpectedly contains Updater.exe." }
 $sumLines = Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot "artifacts\publish") -File -Filter "*.zip" |
     Sort-Object Name |
     ForEach-Object { $fileHash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(); "$fileHash  $($_.Name)" }

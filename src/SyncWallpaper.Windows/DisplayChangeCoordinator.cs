@@ -17,7 +17,7 @@ public sealed class DisplayChangeCoordinator : IDisposable
     private readonly Action<string>? _onSystemEvent;
     private string _lastSignature = string.Empty;
     private DisplaySnapshot? _stableSnapshot;
-    public string LastSystemEvent { get; private set; } = "尚未收到系统事件";
+    public string LastSystemEvent { get; private set; } = "No system event received yet";
     public long Generation => _topology.CurrentGeneration;
     public SessionPowerState PowerState => _powerState.Current;
 

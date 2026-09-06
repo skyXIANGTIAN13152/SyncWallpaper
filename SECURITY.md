@@ -1,5 +1,5 @@
 # Security policy
 
-安全边界、隐私处理和报告要求见 [`docs/SECURITY.md`](docs/SECURITY.md)。
+See [`docs/SECURITY.md`](docs/SECURITY.md) for security boundaries, privacy handling and reporting requirements.
 
-如果问题可能暴露密钥、设备身份、用户数据或可利用的安全缺陷，请不要在公开 Issue 中粘贴原始日志或配置；请通过 GitHub Security Advisories 私下报告，并附上经过脱敏的复现步骤。
+If an issue could expose secrets, device identity, user data or an exploitable vulnerability, do not paste raw logs or configuration into a public issue. Report it privately through GitHub Security Advisories with redacted reproduction steps.

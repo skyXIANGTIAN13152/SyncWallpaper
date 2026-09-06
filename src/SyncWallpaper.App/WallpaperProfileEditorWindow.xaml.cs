@@ -24,11 +24,11 @@ public partial class WallpaperProfileEditorWindow : Window
         EnabledCheck.IsChecked = profile.Enabled;
         CompatibleCheck.IsChecked = profile.AllowCompatibleMatch;
         _monitorChoices = BuildMonitorChoices(runtime.Monitors, profile);
-        _wallpaperChoices = new[] { new WallpaperChoice(string.Empty, "不选择壁纸") }
+        _wallpaperChoices = new[] { new WallpaperChoice(string.Empty, "No wallpaper") }
             .Concat(runtime.Library.Assets.Where(x => !x.IsMissing).OrderBy(x => x.DisplayName, StringComparer.CurrentCultureIgnoreCase)
                 .Select(x => new WallpaperChoice(x.Id, x.DisplayName)))
             .Concat(profile.Roles.Where(x => string.IsNullOrWhiteSpace(x.WallpaperAssetId) && !string.IsNullOrWhiteSpace(x.WallpaperPath))
-                .Select(x => new WallpaperChoice("path:" + x.WallpaperPath, System.IO.Path.GetFileName(x.WallpaperPath) + "（已保存文件）", x.WallpaperPath)))
+                .Select(x => new WallpaperChoice("path:" + x.WallpaperPath, System.IO.Path.GetFileName(x.WallpaperPath) + " (saved file)", x.WallpaperPath)))
             .DistinctBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
             .ToArray();
         foreach (var role in profile.Roles)
@@ -42,11 +42,11 @@ public partial class WallpaperProfileEditorWindow : Window
 
     private IReadOnlyList<MonitorChoice> BuildMonitorChoices(IReadOnlyList<MonitorIdentity> current, WallpaperProfile profile)
     {
-        var choices = new List<MonitorChoice> { new(string.Empty, "请选择显示器", null) };
+        var choices = new List<MonitorChoice> { new(string.Empty, "Select a monitor", null) };
         foreach (var monitor in current.Where(HasStrongIdentity))
-            AddChoice(choices, new MonitorChoice(MonitorKey(monitor), $"{monitor.DisplayLabel} · {monitor.Width}×{monitor.Height} · 当前已连接", monitor.Clone()));
+            AddChoice(choices, new MonitorChoice(MonitorKey(monitor), $"{monitor.DisplayLabel} · {monitor.Width}×{monitor.Height} · Connected", monitor.Clone()));
         foreach (var role in profile.Roles.Where(x => x.Fingerprint is not null))
-            AddChoice(choices, new MonitorChoice(MonitorKey(role.Fingerprint), $"{role.Fingerprint.DisplayLabel} · 已保存身份（当前可能未连接）", role.Fingerprint.Clone()));
+            AddChoice(choices, new MonitorChoice(MonitorKey(role.Fingerprint), $"{role.Fingerprint.DisplayLabel} · Saved identity (may be disconnected)", role.Fingerprint.Clone()));
         return choices;
     }
 
@@ -120,7 +120,7 @@ public partial class WallpaperProfileEditorWindow : Window
         catch (Exception ex)
         {
             StatusText.Text = ex.Message;
-            System.Windows.MessageBox.Show(ex.Message, "编辑壁纸组合", MessageBoxButton.OK, MessageBoxImage.Information);
+            System.Windows.MessageBox.Show(ex.Message, "Edit wallpaper profile", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -141,7 +141,7 @@ public partial class WallpaperProfileEditorWindow : Window
     private void RefreshHint()
     {
         EmptyHint.Visibility = _rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        StatusText.Text = _rows.Count == 0 ? "空白组合不会参与显示器自动匹配。" : $"当前 {_rows.Count} 个逻辑角色。";
+        StatusText.Text = _rows.Count == 0 ? "Blank profiles are excluded from automatic monitor matching." : $"{_rows.Count} logical role(s).";
     }
 
     private static bool HasStrongIdentity(MonitorIdentity monitor)
@@ -161,12 +161,12 @@ public partial class WallpaperProfileEditorWindow : Window
 
     private static string FitLabel(WallpaperFitMode mode) => mode switch
     {
-        WallpaperFitMode.Fill => "填充",
-        WallpaperFitMode.Fit => "适应",
-        WallpaperFitMode.Stretch => "拉伸",
-        WallpaperFitMode.Center => "居中",
-        WallpaperFitMode.Tile => "平铺",
-        WallpaperFitMode.Span => "跨区",
+        WallpaperFitMode.Fill => "Fill",
+        WallpaperFitMode.Fit => "Fit",
+        WallpaperFitMode.Stretch => "Stretch",
+        WallpaperFitMode.Center => "Center",
+        WallpaperFitMode.Tile => "Tile",
+        WallpaperFitMode.Span => "Span",
         _ => mode.ToString()
     };
 

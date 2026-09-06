@@ -1,16 +1,16 @@
-# 真实硬件验证清单
+# Physical hardware test checklist
 
-- [ ] 启动后确认当前显示器数量、型号、分辨率、刷新率、DPI、HDR、方向/翻转和接口均正确。
-- [ ] 确认内部屏与每块外接屏都有可解释的稳定身份来源。
-- [ ] 仅连接笔记本屏，确认 Laptop 组合自动匹配并应用。
-- [ ] 逐一连接 HDMI、DP、USB-C 组合，等待拓扑稳定并检查壁纸。
-- [ ] 交换两台同型号屏幕的接口：有序列号时身份跟随物理屏；无序列号且有歧义时必须要求确认。
-- [ ] 旋转竖屏，确认界面按 Windows 规则显示“纵向/横向”和“已翻转/未翻转”。
-- [ ] 手动应用一个组合，确认不会改写自动匹配选择或组合元数据。
-- [ ] 重新登录，确认匹配组合在开机后自动应用，不需要再次插拔显示器。
-- [ ] 手动睡眠/唤醒和锁定/解锁，确认屏序恢复监测并保持正确壁纸。
-- [ ] 在保存工作的前提下重启 Explorer，确认主进程存活并重新验证壁纸。
-- [ ] 连续插拔后检查进程 Working Set、Private Bytes、句柄和 CPU 没有持续增长。
-- [ ] 导出脱敏报告，分享前人工检查内容。
+- [ ] Confirm monitor count, model, resolution, refresh rate, DPI, HDR, orientation/flip and connector after startup.
+- [ ] Confirm the internal display and every external display have an explainable stable identity source.
+- [ ] Connect only the laptop panel and confirm the Laptop profile matches and applies automatically.
+- [ ] Connect HDMI, DP and USB-C combinations one at a time, wait for topology stability and inspect wallpapers.
+- [ ] Swap connectors on identical monitors: valid serials must follow the physical monitor; unresolved serial-less ambiguity must request confirmation.
+- [ ] Rotate a portrait display and confirm the UI follows Windows Normal/Flipped semantics.
+- [ ] Manually apply a profile and confirm automatic selection and profile metadata do not change.
+- [ ] Sign in again and confirm the matching profile applies without another hot-plug event.
+- [ ] Sleep/wake and lock/unlock the system; confirm monitoring and wallpapers recover.
+- [ ] Restart Explorer while preserving work; confirm the process survives and verifies wallpapers again.
+- [ ] After repeated hot-plug cycles, confirm Working Set, Private Bytes, handles and CPU do not grow continuously.
+- [ ] Export a redacted report and review it manually before sharing.
 
-所有步骤只观察或应用壁纸，不修改 Windows 显示参数。
+All steps observe or apply wallpapers only; they do not modify Windows display parameters.

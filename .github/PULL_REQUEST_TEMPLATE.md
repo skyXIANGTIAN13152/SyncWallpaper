@@ -1,22 +1,22 @@
-## 变更说明
+## Change summary
 
-<!-- 简要说明做了什么以及为什么。 -->
+<!-- Briefly describe what changed and why. -->
 
-## 影响范围
+## Scope
 
-- [ ] 核心/配置
-- [ ] 显示器/壁纸
-- [ ] Windows API 或 Shell
-- [ ] UI/托盘
-- [ ] 文档/发布
+- [ ] Core/configuration
+- [ ] Monitors/wallpapers
+- [ ] Windows APIs or Shell
+- [ ] UI/tray
+- [ ] Documentation/release
 
-## 验证
+## Verification
 
 - [ ] `dotnet build SyncWallpaper.sln -c Release`
 - [ ] `dotnet test SyncWallpaper.sln -c Release`
-- [ ] 已更新相关文档、对标矩阵或已知限制
-- [ ] 未提交本机配置、壁纸、日志、诊断输出或密钥
+- [ ] Related docs, compatibility notes or known limitations updated
+- [ ] No local configuration, wallpapers, logs, diagnostics or secrets committed
 
-## 未验证项
+## Unverified items
 
-<!-- 列出需要真实 Windows 硬件或人工操作的场景。 -->
+<!-- List scenarios that still need physical Windows hardware or manual verification. -->

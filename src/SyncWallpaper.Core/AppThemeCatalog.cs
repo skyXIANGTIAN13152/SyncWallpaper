@@ -13,19 +13,19 @@ public static class AppThemeCatalog
 {
     public const string DefaultId = "Aurora";
 
-    public static AppTheme Aurora { get; } = Create("Aurora", "极光科技", "深空蓝 · 冰青 · 星云紫",
+    public static AppTheme Aurora { get; } = Create("Aurora", "Aurora", "Deep blue · Ice cyan · Nebula violet",
         "#0D1322", "#10192B", "#141F34", "#1B2340", "#18253D", "#0E182B", "#17243A",
         "#EAF1FD", "#B0BED5", "#90A0B9", "#536A89", "#30435F", "#263C55", "#314C68",
         "#28465B", "#F0FAFF", "#67DDF0", "#94B8FF", "#C6ABFF", "#072031", "#9CEAF6",
         "#62DBAA", "#FF9BA6", "#F0CD84");
 
-    public static AppTheme Graphite { get; } = Create("Graphite", "石墨暗色", "中性石墨 · 柔和薄荷",
+    public static AppTheme Graphite { get; } = Create("Graphite", "Graphite", "Neutral graphite · Soft mint",
         "#15181E", "#1A1E26", "#202630", "#222E32", "#222832", "#171D26", "#292F3A",
         "#F3F4F6", "#BFC6D3", "#A2ACBC", "#657286", "#3B4554", "#343E4C", "#3F4C5F",
         "#344D48", "#F2FFF9", "#87DFC5", "#ACC8F0", "#D0B8ED", "#102820", "#AFF0DC",
         "#86E2AB", "#FFA4AA", "#EED099");
 
-    public static AppTheme Daylight { get; } = Create("Daylight", "云白亮色", "雾白底色 · 钴蓝强调",
+    public static AppTheme Daylight { get; } = Create("Daylight", "Daylight", "Cloud white · Cobalt accents",
         "#F3F6FC", "#EAF0F8", "#FFFFFF", "#E9EFF9", "#FFFFFF", "#F8FAFE", "#FFFFFF",
         "#17253D", "#485B77", "#5D6A7E", "#8292AB", "#D1DBEA", "#E1EAF8", "#CCDDF5",
         "#D5E4FF", "#13346C", "#1252B8", "#2D57B3", "#7343AD", "#FFFFFF", "#0F4294",

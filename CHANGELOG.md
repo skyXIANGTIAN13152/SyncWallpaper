@@ -1,6 +1,8 @@
 # Changelog
 
-## 1.1.0-beta.2 — 2026-09-06
+## 1.1.0-beta.2-en — 2026-09-06
+
+- English edition with translated application UI, tray messages, diagnostics, themes and documentation; feature and safety parity with the Chinese beta.2 release.
 
 - Add Aurora technology, Graphite dark and Daylight light themes with instant switching and a persisted appearance preference.
 - Replace native mixed-color input, dropdown, checkbox and selection surfaces with shared theme-aware templates; retain text contrast in selected, focused and disabled states.

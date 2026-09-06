@@ -4,4 +4,4 @@ param(
 )
 $ErrorActionPreference = "Stop"
 & (Join-Path $PSScriptRoot "install.ps1") -PackagePath $PackagePath -InstallRoot $InstallRoot
-Write-Host "升级完成；用户配置、壁纸资产和现有开机自启选择均保留。"
+Write-Host "Upgrade complete. User configuration, wallpaper assets and the current startup choice were preserved."

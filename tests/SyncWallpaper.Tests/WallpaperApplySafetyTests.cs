@@ -18,7 +18,7 @@ public sealed class WallpaperApplySafetyTests
         Assert.IsFalse(result.Success);
         Assert.AreEqual(0, opens);
         Assert.AreEqual(0, result.AppliedCount);
-        StringAssert.Contains(result.Message, "同一台显示器");
+        StringAssert.Contains(result.Message, "same monitor");
     }
 
     [TestMethod]

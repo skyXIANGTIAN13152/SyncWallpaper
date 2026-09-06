@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
-  <title id="title">屏序 SyncWallpaper taskbar icon</title>
+  <title id="title">SyncWallpaper taskbar icon</title>
   <desc id="desc">A cyan observation ring containing a desktop monitor and a laptop, based on the supplied taskbar reference.</desc>
   <defs>
     <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#67F6FF"/><stop offset="0.55" stop-color="#20D7FF"/><stop offset="1" stop-color="#1689FF"/></linearGradient>

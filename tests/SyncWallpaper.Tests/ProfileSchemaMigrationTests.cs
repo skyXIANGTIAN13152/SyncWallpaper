@@ -11,7 +11,7 @@ public class ProfileSchemaMigrationTests
         var duplicate = "same-role-id";
         var profile = new WallpaperProfile
         {
-            Name = "双横屏",
+            Name = "Two landscape monitors",
             Roles = new()
             {
                 new() { RoleId = duplicate, Role = "Landscape" },
@@ -40,7 +40,7 @@ public class ProfileSchemaMigrationTests
         Assert.AreEqual(ProfileSchemaMigrator.CurrentSchemaVersion, document.SchemaVersion);
         Assert.AreNotEqual(profile.Roles[0].RoleId, profile.Roles[1].RoleId);
         CollectionAssert.AreEqual(new[] { "a.png", "b.png" }, profile.Roles.Select(x => x.WallpaperPath).ToArray());
-        Assert.IsTrue(messages.Any(x => x.Contains("绑定编号")));
+        Assert.IsTrue(messages.Any(x => x.Contains("binding IDs")));
     }
 
     [TestMethod]
@@ -50,7 +50,7 @@ public class ProfileSchemaMigrationTests
         var profile = new WallpaperProfile
         {
             SchemaVersion = 1,
-            Name = "旧配置",
+            Name = "Legacy configuration",
             AllowCompatibleMatch = false,
             Roles = new List<MonitorRoleBinding>
             {

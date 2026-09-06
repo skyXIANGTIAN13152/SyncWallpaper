@@ -88,33 +88,33 @@ public sealed class TopologyCoordinator : IAsyncDisposable
                     token.ThrowIfCancellationRequested();
                     if (!sampled.Stable)
                     {
-                        Publish(new(signal.Generation, false, false, "拓扑尚未稳定", sampled.Snapshot.Signature));
+                        Publish(new(signal.Generation, false, false, "Topology is not stable yet", sampled.Snapshot.Signature));
                         continue;
                     }
                     lock (_gate)
                     {
                         if (signal.Generation != CurrentGeneration || (_pending is not null && !_pending.Manual && !signal.Manual))
                         {
-                            Publish(new(signal.Generation, false, true, "已被更新的拓扑事件取代", sampled.Snapshot.Signature));
+                            Publish(new(signal.Generation, false, true, "Superseded by a newer topology event", sampled.Snapshot.Signature));
                             continue;
                         }
                         if (!signal.Manual && string.Equals(_lastAppliedSignature, sampled.Snapshot.Signature, StringComparison.Ordinal))
                         {
-                            Publish(new(signal.Generation, false, false, "重复拓扑签名已去重", sampled.Snapshot.Signature));
+                            Publish(new(signal.Generation, false, false, "Duplicate topology signature was ignored", sampled.Snapshot.Signature));
                             continue;
                         }
                     }
                     await _apply(signal, sampled.Snapshot, token).ConfigureAwait(false);
                     lock (_gate) _lastAppliedSignature = sampled.Snapshot.Signature;
-                    Publish(new(signal.Generation, true, false, signal.Manual ? "手动拓扑应用完成" : "拓扑应用完成", sampled.Snapshot.Signature));
+                    Publish(new(signal.Generation, true, false, signal.Manual ? "Manual topology application completed" : "Topology application completed", sampled.Snapshot.Signature));
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
-                    Publish(new(signal.Generation, false, signal.Generation != CurrentGeneration, "拓扑应用已取消", string.Empty));
+                    Publish(new(signal.Generation, false, signal.Generation != CurrentGeneration, "Topology application cancelled", string.Empty));
                 }
                 catch (Exception ex)
                 {
-                    Publish(new(signal.Generation, false, false, "拓扑应用失败：" + ex.Message, string.Empty));
+                    Publish(new(signal.Generation, false, false, "Topology application failed: " + ex.Message, string.Empty));
                 }
             }
         }

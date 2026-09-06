@@ -44,7 +44,7 @@ public static class ReleaseNotesSanitizer
             builder.Append(ch);
             if (builder.Length >= MaxCharacters) break;
         }
-        if (text.Length > builder.Length) builder.Append("\n\n（更新说明过长，已截断；可在 GitHub 查看完整说明。）");
+        if (text.Length > builder.Length) builder.Append("\n\n(Release notes were truncated; view the full notes on GitHub.)");
         return builder.ToString();
     }
 }

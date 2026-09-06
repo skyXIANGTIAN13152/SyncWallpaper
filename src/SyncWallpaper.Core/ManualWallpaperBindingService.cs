@@ -17,7 +17,7 @@ public static class ManualWallpaperBindingService
     public static void Apply(WallpaperProfile profile, IReadOnlyList<ManualWallpaperAssignment> assignments)
     {
         if (assignments.Count == 0 || assignments.Count > 8)
-            throw new InvalidOperationException("请选择 1 至 8 台显示器。");
+            throw new InvalidOperationException("Select between 1 and 8 monitors.");
         var devices = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var remaining = profile.Roles.ToList();
         var roles = new List<MonitorRoleBinding>();
@@ -25,9 +25,9 @@ public static class ManualWallpaperBindingService
         {
             var monitor = assignment.Monitor;
             if (string.IsNullOrWhiteSpace(monitor.MonitorDevicePath) || !devices.Add(monitor.MonitorDevicePath))
-                throw new InvalidOperationException("同一台显示器不能重复分配；请重新识别显示器。");
+                throw new InvalidOperationException("The same monitor cannot be assigned more than once. Identify monitors again.");
             if (string.IsNullOrWhiteSpace(assignment.Role))
-                throw new InvalidOperationException("每台显示器都需要选择逻辑角色。");
+                throw new InvalidOperationException("Choose a logical role for every monitor.");
             // Never recover an old binding by a label such as Portrait: several
             // physical displays can legitimately have that label.
             var existing = FindExisting(remaining, monitor);
@@ -37,7 +37,7 @@ public static class ManualWallpaperBindingService
             role.DisplayName = existing is not null && existing.Role.Equals(role.Role, StringComparison.OrdinalIgnoreCase)
                 ? existing.DisplayName : role.Role switch
                 {
-                    "Laptop" => "笔记本本体", "Landscape" => "横屏", "Portrait" => "竖屏", _ => role.Role
+                    "Laptop" => "Laptop", "Landscape" => "Landscape", "Portrait" => "Portrait", _ => role.Role
                 };
             role.Fingerprint = monitor.Clone();
             role.LastKnownMonitorDevicePath = monitor.MonitorDevicePath;
@@ -50,7 +50,7 @@ public static class ManualWallpaperBindingService
             // A blank field in the identification dialog means unchanged, for
             // both managed assets and previously selected external files.
             role.LastSuccessfulMatchAt = null;
-            role.Notes = "用户在 A/B/C 识别界面确认";
+            role.Notes = "Confirmed by the user in the A/B/C identification screen";
             roles.Add(role);
         }
         WallpaperBindingSafety.EnsureUniqueRoleIds(roles);

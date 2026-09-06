@@ -30,7 +30,7 @@ public static class WallpaperBindingSafety
         error = string.Empty;
         if (match.Profile is null || match.Profile.Roles.Count == 0 || !HasUniqueKeys(match.Profile.Roles))
         {
-            error = "显示器绑定编号重复或配置为空，请重新保存组合。";
+            error = "Monitor binding IDs are duplicated or the profile is empty. Save the profile again.";
             return false;
         }
         var devices = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -39,12 +39,12 @@ public static class WallpaperBindingSafety
         {
             if (!match.TryGetMonitor(role, out var monitor) || string.IsNullOrWhiteSpace(monitor.MonitorDevicePath))
             {
-                error = $"“{role.DisplayName}”缺少目标显示器，未应用壁纸。";
+                error = $"No target monitor for '{role.DisplayName}'; wallpapers were not applied.";
                 return false;
             }
             if (!devices.Add(monitor.MonitorDevicePath))
             {
-                error = $"多个壁纸绑定指向同一台显示器“{monitor.DisplayLabel}”，未应用壁纸。";
+                error = $"Multiple wallpaper bindings target the same monitor '{monitor.DisplayLabel}'; wallpapers were not applied.";
                 return false;
             }
             // Applying awaits Explorer. Later edits must not change this transaction.

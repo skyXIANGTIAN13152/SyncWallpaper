@@ -47,7 +47,7 @@ public sealed class SemanticVersion : IComparable<SemanticVersion>, IEquatable<S
 
     public static SemanticVersion Parse(string value) => TryParse(value, out var version)
         ? version!
-        : throw new FormatException($"无效的语义版本：{value}");
+        : throw new FormatException($"Invalid semantic version: {value}");
 
     public int CompareTo(SemanticVersion? other)
     {

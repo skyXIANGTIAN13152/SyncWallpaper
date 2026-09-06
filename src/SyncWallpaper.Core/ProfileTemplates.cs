@@ -6,7 +6,7 @@ public static class ProfileTemplates
     {
         Name = "Laptop Only", Combination = DisplayCombinationKind.LaptopOnly,
         ExpectedMonitorCount = 1, Priority = 100, AutoApply = true,
-        Roles = new() { new MonitorRoleBinding { Role = "Laptop", DisplayName = "笔记本本体" } }
+        Roles = new() { new MonitorRoleBinding { Role = "Laptop", DisplayName = "Laptop" } }
     };
 
     public static WallpaperProfile ThreeMonitorSetup() => new()
@@ -15,9 +15,9 @@ public static class ProfileTemplates
         ExpectedMonitorCount = 3, Priority = 50, AutoApply = true,
         Roles = new()
         {
-            new MonitorRoleBinding { Role = "Portrait", DisplayName = "竖屏" },
-            new MonitorRoleBinding { Role = "Laptop", DisplayName = "笔记本本体" },
-            new MonitorRoleBinding { Role = "Landscape", DisplayName = "横屏" }
+            new MonitorRoleBinding { Role = "Portrait", DisplayName = "Portrait" },
+            new MonitorRoleBinding { Role = "Laptop", DisplayName = "Laptop" },
+            new MonitorRoleBinding { Role = "Landscape", DisplayName = "Landscape" }
         }
     };
 

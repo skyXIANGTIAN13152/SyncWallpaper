@@ -1,19 +1,19 @@
-# 壁纸组合匹配
+# Wallpaper profile matching
 
-每个组合保存名称、期望屏幕数量、优先级、逻辑角色、稳定显示器指纹、壁纸资产和填充方式。逻辑角色可以是 Laptop、Landscape、Portrait 或用户自定义名称。
+Each profile stores a name, expected monitor count, priority, logical roles, stable monitor fingerprints, wallpaper assets and fit modes. Roles may be Laptop, Landscape, Portrait or a custom name.
 
-## 自动匹配
+## Automatic matching
 
-1. 先按活动显示器数量筛选组合。
-2. 对组合内角色和当前物理显示器做一对一分配。
-3. 依照 EDID 序列号、设备路径、实例名和硬件拓扑分层评分。
-4. 组合必须拥有唯一最佳分配、可靠身份和每个角色的有效壁纸，才显示绿色 `已匹配` 并允许自动应用。
-5. 屏数不同、配置不完整、壁纸缺失、证据太弱或存在并列分配时显示红色 `未匹配`。
+1. Filter profiles by the number of active monitors.
+2. Build a one-to-one assignment between profile roles and physical monitors.
+3. Score EDID serials, device paths, instance names and hardware topology in layers.
+4. Mark a profile **Matched** and allow automatic application only when the assignment is unique, identity evidence is reliable and every role has a valid wallpaper.
+5. Mark it **Unmatched** when monitor count, identity, roles or wallpapers are incomplete, evidence is weak or assignments tie.
 
-空白组合可提前创建并随时编辑，但不会自动匹配。手动“应用选中组合”只执行该组合的壁纸事务，不修改组合优先级、编辑选择、修改时间或当前自动匹配结果。
+Blank profiles can be created and edited at any time, but they do not participate in automatic matching. **Apply selected profile** runs that profile's wallpaper transaction only; it does not change profile priority, edit selection, modification time or the current automatic result.
 
-同一物理拓扑可以保存多套壁纸组合。匹配器使用优先级和稳定排序选择唯一方案；匹配本身不会把另一个组合改成“当前”或“已启用”。
+Multiple profiles may describe the same topology. Priority and stable ordering choose one profile; matching never relabels another profile as current or enabled.
 
-## 拓扑变化
+## Topology changes
 
-开机、插拔 HDMI/DP/USB-C、方向/布局变化、睡眠唤醒和 Explorer 恢复都会触发重新检测。拓扑稳定后立即匹配现有组合；匹配成功自动应用，无需用户再点“应用”。
+Sign-in, HDMI/DP/USB-C hot-plug, orientation/layout changes, sleep/wake and Explorer recovery trigger detection. Once the topology is stable, existing profiles are matched and a complete match is applied immediately.

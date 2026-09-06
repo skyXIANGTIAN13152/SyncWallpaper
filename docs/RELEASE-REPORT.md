@@ -1,39 +1,19 @@
-# 1.1.0-beta.1 壁纸专版验收
+# 1.1.0-beta.1-en release acceptance
 
-日期：2026-08-25
+## Product scope
 
-## 产品范围
+This English release contains multi-monitor discovery and identity, the wallpaper library, named profiles, automatic matching/application, tray integration, logs, startup, read-only diagnostics and user-initiated GitHub update checks. It retains complete read-only resolution, refresh rate, HDR, DPI, orientation, connector and hardware identity data, but has no display-setting write capability.
 
-发布版只包含多显示器发现/识别、壁纸档案库、壁纸组合、自动匹配与应用、托盘、日志、启动项、只读诊断和手动 GitHub 更新检查。
+## Verification
 
-显示器的分辨率、刷新率、HDR、DPI、方向、接口和硬件身份仍完整读取；所有显示参数写入能力已经移除。
+- Release build: 0 warnings and 0 errors.
+- Automated tests: 80 passed (67 core/UI tests, 9 update tests and 4 Windows integration tests).
+- The package contains only the App and read-only Diagnostics executables plus documentation and installation scripts.
+- Both ZIPs were generated from the same isolated English worktree and checked with SHA-256.
 
-## 已移除
+## Packages
 
-显示配置写入、音频、窗口区域/规则/热键、桌面图标、独立副屏任务栏、Shell、屏保、远程、在线壁纸、模块管理和通用硬件验收中心。
+- `SyncWallpaper-1.1.0-beta.1-en-win-x64.zip` — `13d8aad461ad9ed770847c5834a0591eef8321ea1e22b43f7ffaba3212eeac30`
+- `SyncWallpaper-1.1.0-beta.1-en-win-x64-selfcontained.zip` — `c5231a230ac4aed88d161d4d7aa18ee5c04318e7882bc76d45a005bd5e3952b1`
 
-## 构建与测试
-
-- Release solution build：0 warnings / 0 errors。
-- Unit tests：67 passed。
-- Update tests：9 passed。
-- Windows integration tests：4 passed。
-- 总计：80 passed / 0 failed / 0 skipped。
-- 真实三屏环境曾成功读取并按稳定身份应用 3/3 台壁纸；当天日志保留完整事务记录。
-- 最终部署时仅连接笔记本本体，冷启动后自动匹配并应用 1/1 台，无需手动点击。
-- 1000 次只读显示器发现耗时 7.47 秒，句柄增量 4；后台静置 15 秒 CPU、句柄和 Private Bytes 均无增长。
-
-## 发布内容
-
-`publish.ps1` 只发布 `App` 与 `Diagnostics`。ZIP 包含许可证、说明、文档和安装脚本，不包含用户数据、额外宿主、自动安装器或配置备份。
-
-最终发布文件：
-
-- `SyncWallpaper-1.1.0-beta.1-win-x64.zip`
-  - SHA-256：`1434208fafda535948cf737f4d83eda6d96d50ef045d4a7f401085a2c9bd5a36`
-- `SyncWallpaper-1.1.0-beta.1-win-x64-selfcontained.zip`
-  - SHA-256：`4a51acfb14eaebdead09794640e652fd2ce23c05c6c3ecc4ba028151bffcc2d3`
-
-正式后台进程静置样本：Working Set 129,822,720 bytes，Private Bytes 60,276,736 bytes，Handle Count 1,060，15 秒 CPU 增量 0。
-
-清理退役模块、旧 RC 包、旧验收快照、临时诊断工具、自包含解包目录和可再生成的 `bin/obj` 后，共释放 402,968,307 bytes（384.30 MiB）。`Config`、`Wallpapers`、`Logs` 和当前渲染缓存未删除。
+No user configuration, wallpapers, logs, credentials, developer paths, updater or configuration backup is included in the release packages.
