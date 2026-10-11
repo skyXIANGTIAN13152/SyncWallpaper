@@ -12,7 +12,8 @@ if (-not $target.StartsWith($allowedRoot + [IO.Path]::DirectorySeparatorChar, [S
 if (-not (Test-Path (Join-Path $package "App\SyncWallpaper.App.exe"))) { throw "找不到发布包中的 App\SyncWallpaper.App.exe。" }
 New-Item -ItemType Directory -Force -Path $target | Out-Null
 # This is a user-invoked installer only. The product never invokes this script.
-# Configuration and wallpapers live outside the program directory and are not touched.
+# The clean release contains no runtime data; copying it preserves any existing
+# Config/Wallpapers directories beside the program files or in the fallback root.
 Copy-Item -Path (Join-Path $package "*") -Destination $target -Recurse -Force
 if ($StartWithWindows) {
     $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"

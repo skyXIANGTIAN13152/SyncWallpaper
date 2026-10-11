@@ -8,6 +8,25 @@ public sealed class ProfileMatcher
 
     public MatchResult Match(IReadOnlyList<MonitorIdentity> monitors, IReadOnlyList<WallpaperProfile> profiles)
     {
+        var specificProfiles = profiles.Where(profile => !profile.IsGeneric).ToArray();
+        // A complete hardware combination always wins, irrespective of generic
+        // priority. Incomplete drafts must not hide a working fallback.
+        var completeSpecific = MatchSpecific(monitors, specificProfiles
+            .Where(WallpaperProfileApplyPolicy.IsComplete).ToArray(), requireApplicableIdentity: true);
+        if (completeSpecific.CanAutoApply) return completeSpecific;
+
+        var generic = new GenericProfileMatcher().Match(monitors, profiles);
+        if (generic.CanAutoApply) return generic;
+        if (specificProfiles.Length == 0 && profiles.Any(profile => profile.IsGeneric)) return generic;
+
+        // Keep the existing identity diagnostics for incomplete specific
+        // profiles when no applicable fallback is available.
+        return MatchSpecific(monitors, specificProfiles);
+    }
+
+    private MatchResult MatchSpecific(IReadOnlyList<MonitorIdentity> monitors, IReadOnlyList<WallpaperProfile> profiles,
+        bool requireApplicableIdentity = false)
+    {
         if (monitors.Count == 0 || profiles.Count == 0)
             return new MatchResult { Status = MatchStatus.NoMatch, Message = "没有可用的显示器配置" };
 
@@ -27,9 +46,15 @@ public sealed class ProfileMatcher
             };
 
         var evaluations = validCandidates.Select(p => EvaluateProfile(monitors, p))
+            // Summed strong scores must not let a profile with one unsafe
+            // role displace a fully reliable specific combination.
+            .Where(e => !requireApplicableIdentity || (e.TopAssignments == 1
+                && !e.WeakOnly && e.Confidence >= Math.Max(0, e.Profile.MinimumConfidence)))
             .OrderByDescending(x => x.Score)
             .ThenByDescending(x => x.Profile.Priority)
             .ToList();
+        if (evaluations.Count == 0)
+            return new MatchResult { Status = MatchStatus.NoMatch, Message = "没有可安全应用的特定显示器组合" };
         var best = evaluations[0];
         var runnerUp = evaluations.Count > 1 ? evaluations[1].Score : 0;
         if (best.Score <= 0)

@@ -1,14 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
-  <title id="title">SyncWallpaper ambiguous or error tray icon</title>
-  <desc id="desc">A red broken observation ring with an uncertain companion display and warning triangle.</desc>
-  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M14 18a27 27 0 0 1 39 1M53 36a27 27 0 0 1-13 20M29 58A27 27 0 0 1 8 39" stroke="#C32E34" stroke-width="3.5"/>
-    <rect x="15" y="24" width="28" height="19" rx="3" stroke="#FF4F4E" stroke-width="3.6"/>
-    <path d="M29 43v6M23 49h12" stroke="#FF4F4E" stroke-width="3.6"/>
-    <rect x="38" y="32" width="17" height="14" rx="2" stroke="#FF4F4E" stroke-width="3.1" stroke-dasharray="5 4"/>
-    <path d="M35 44l4 4-3 4" stroke="#FF4F4E" stroke-width="3.1"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 32 32" role="img" aria-labelledby="title desc">
+  <title id="title">SyncWallpaper error tray icon</title>
+  <desc id="desc">Hollow landscape and portrait displays with an independent error state mark. Transparent background and screen interiors.</desc>
+  <g fill="none" stroke="#D5A085" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 14v-1a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h13M12.5 25v3M9 28h7"/>
+    <rect x="20.5" y="16" width="8.5" height="13" rx="1.5"/>
+    <path d="M16 1.5V5"/><circle cx="16" cy="8.5" r=".9" fill="#D5A085" stroke="none"/>
   </g>
-  <path d="M50 42l10 16H40z" fill="#FF4F4E"/>
-  <path d="M50 47v5" stroke="#241522" stroke-width="2.5" stroke-linecap="round"/>
-  <circle cx="50" cy="55" r="1.5" fill="#241522"/>
 </svg>

@@ -45,6 +45,27 @@ public sealed class WindowsWallpaperIntegrationTests
     }
 
     [TestMethod]
+    public void WallpaperTransactionTopologyContainsOnlyCurrentDisplaysWithMatchingBounds()
+    {
+        if (!OperatingSystem.IsWindows()) Assert.Inconclusive("Windows API 不可用。");
+        _ = WindowsDpiAwareness.TryEnablePerMonitorV2();
+        var active = new MonitorDiscoveryService().Discover().Where(monitor => monitor.IsConnected).ToArray();
+        if (active.Length == 0) Assert.Inconclusive("当前会话没有活动显示路径。");
+        var nativeType = typeof(WallpaperApplyService).GetNestedType("NativeWallpaperDesktop", System.Reflection.BindingFlags.NonPublic)!;
+        using var desktop = (IWallpaperDesktop)Activator.CreateInstance(nativeType, nonPublic: true)!;
+        CollectionAssert.AreEquivalent(active.Select(monitor => monitor.MonitorDevicePath).ToArray(), desktop.GetMonitorDevicePaths().ToArray());
+        foreach (var monitor in active)
+        {
+            var bounds = desktop.GetMonitorBounds(monitor.MonitorDevicePath);
+            Assert.IsNotNull(bounds);
+            Assert.AreEqual(monitor.DesktopX, bounds.X);
+            Assert.AreEqual(monitor.DesktopY, bounds.Y);
+            Assert.AreEqual(monitor.Width, bounds.Width);
+            Assert.AreEqual(monitor.Height, bounds.Height);
+        }
+    }
+
+    [TestMethod]
     public void RepeatedMonitorDiscoveryDoesNotLeakHandles()
     {
         if (!OperatingSystem.IsWindows()) Assert.Inconclusive("Windows API 不可用。");

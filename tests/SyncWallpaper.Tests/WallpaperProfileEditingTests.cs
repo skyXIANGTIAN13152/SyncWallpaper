@@ -116,6 +116,19 @@ public sealed class WallpaperProfileEditingTests
         StringAssert.Contains(error.Message, "可靠硬件身份");
     }
 
+    [TestMethod]
+    public void PriorityIsPreservedUnlessExplicitlyEdited()
+    {
+        var profile = WallpaperProfileEditingService.CreateBlank("test", 120);
+        var draft = Draft(Role("Laptop", TestData.Monitor(), "original-wallpaper"));
+        WallpaperProfileEditingService.Apply(profile, draft);
+        Assert.AreEqual(120, profile.Priority);
+        draft.Priority = 250;
+        WallpaperProfileEditingService.Apply(profile, draft);
+        Assert.AreEqual(250, profile.Priority);
+        Assert.AreEqual("original-wallpaper", profile.Roles.Single().WallpaperAssetId);
+    }
+
     private static WallpaperProfileEditDraft Draft(params WallpaperRoleEditDraft[] roles)
         => new() { Name = "test", Enabled = true, Roles = roles.ToList() };
 

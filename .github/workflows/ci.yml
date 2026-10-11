@@ -23,3 +23,6 @@ jobs:
         run: dotnet build SyncWallpaper.sln -c Release --no-restore
       - name: Test
         run: dotnet test SyncWallpaper.sln -c Release --no-build --verbosity normal
+      - name: Verify uninstall preserves user data
+        shell: pwsh
+        run: ./tests/SyncWallpaper.ScriptTests/Uninstall.Tests.ps1

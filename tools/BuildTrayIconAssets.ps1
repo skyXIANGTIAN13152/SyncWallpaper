@@ -1,22 +1,31 @@
 param(
-    [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
+    [ValidateSet('normal', 'generic', 'unmatched', 'paused', 'error', 'recognizing')]
+    [string[]]$States = @('normal', 'generic', 'unmatched', 'paused', 'error', 'recognizing'),
+    [switch]$SkipTaskbarAssets
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
-
 $assetRoot = Join-Path $RepositoryRoot 'assets'
 $trayRoot = Join-Path $assetRoot 'TrayIcons'
 New-Item -ItemType Directory -Force -Path $trayRoot | Out-Null
+$gold = [System.Drawing.ColorTranslator]::FromHtml('#D2B47A')
+$white = [System.Drawing.ColorTranslator]::FromHtml('#F3EBDC')
+$sage = [System.Drawing.ColorTranslator]::FromHtml('#A5B5A9')
+$copper = [System.Drawing.ColorTranslator]::FromHtml('#D5A085')
 
-function New-Color([int]$a, [int]$r, [int]$g, [int]$b) {
-    return [System.Drawing.Color]::FromArgb($a, $r, $g, $b)
+function New-Pen([System.Drawing.Color]$color, [float]$width) {
+    $pen = [System.Drawing.Pen]::new($color, $width)
+    $pen.StartCap = $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+    $pen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
+    return $pen
 }
 
-function Draw-RoundedRectangle([System.Drawing.Graphics]$graphics, [System.Drawing.Pen]$pen, [System.Drawing.RectangleF]$rectangle, [float]$radius) {
+function Draw-RoundedRectangle($graphics, $pen, [System.Drawing.RectangleF]$rectangle, [float]$radius) {
     $path = [System.Drawing.Drawing2D.GraphicsPath]::new()
-    $diameter = $radius * 2
+    $diameter = 2 * $radius
     $path.AddArc($rectangle.Left, $rectangle.Top, $diameter, $diameter, 180, 90)
     $path.AddArc($rectangle.Right - $diameter, $rectangle.Top, $diameter, $diameter, 270, 90)
     $path.AddArc($rectangle.Right - $diameter, $rectangle.Bottom - $diameter, $diameter, $diameter, 0, 90)
@@ -26,208 +35,177 @@ function Draw-RoundedRectangle([System.Drawing.Graphics]$graphics, [System.Drawi
     $path.Dispose()
 }
 
-function Test-BackgroundPixel([System.Drawing.Color]$color) {
-    $maximum = [Math]::Max($color.R, [Math]::Max($color.G, $color.B))
-    return $maximum -lt 92
-}
-
-function Remove-EdgeBackground([string]$path) {
-    $source = [System.Drawing.Bitmap]::new($path)
-    $width = $source.Width
-    $height = $source.Height
-    $visited = [bool[]]::new($width * $height)
-    $queue = [System.Collections.Generic.Queue[int]]::new()
-
-    function Add-BackgroundPixel([int]$x, [int]$y) {
-        if ($x -lt 0 -or $y -lt 0 -or $x -ge $width -or $y -ge $height) { return }
-        $index = $y * $width + $x
-        if ($visited[$index]) { return }
-        if (-not (Test-BackgroundPixel $source.GetPixel($x, $y))) { return }
-        $visited[$index] = $true
-        $queue.Enqueue($index)
-    }
-
-    for ($x = 0; $x -lt $width; $x++) { Add-BackgroundPixel $x 0; Add-BackgroundPixel $x ($height - 1) }
-    for ($y = 1; $y -lt ($height - 1); $y++) { Add-BackgroundPixel 0 $y; Add-BackgroundPixel ($width - 1) $y }
-    while ($queue.Count -gt 0) {
-        $index = $queue.Dequeue()
-        $x = $index % $width
-        $y = [Math]::Floor($index / $width)
-        Add-BackgroundPixel ($x - 1) $y; Add-BackgroundPixel ($x + 1) $y
-        Add-BackgroundPixel $x ($y - 1); Add-BackgroundPixel $x ($y + 1)
-    }
-
-    $result = [System.Drawing.Bitmap]::new($width, $height, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-    for ($x = 0; $x -lt $width; $x++) {
-        for ($y = 0; $y -lt $height; $y++) {
-            $color = $source.GetPixel($x, $y)
-            $index = $y * $width + $x
-            if ($visited[$index]) {
-                $maximum = [Math]::Max($color.R, [Math]::Max($color.G, $color.B))
-                $alpha = if ($maximum -lt 55) { 0 } else { [Math]::Min(255, ($maximum - 55) * 6) }
-                $color = [System.Drawing.Color]::FromArgb($alpha, $color.R, $color.G, $color.B)
-            }
-            $result.SetPixel($x, $y, $color)
-        }
-    }
-    $source.Dispose()
-    return $result
+function Draw-Screens($graphics, $pen, [float]$scale) {
+    $path = [System.Drawing.Drawing2D.GraphicsPath]::new()
+    $path.AddLine(22 * $scale, 14 * $scale, 22 * $scale, 13 * $scale)
+    $path.AddArc(18 * $scale, 11 * $scale, 4 * $scale, 4 * $scale, 0, -90)
+    $path.AddLine(20 * $scale, 11 * $scale, 5 * $scale, 11 * $scale)
+    $path.AddArc(3 * $scale, 11 * $scale, 4 * $scale, 4 * $scale, 270, -90)
+    $path.AddLine(3 * $scale, 13 * $scale, 3 * $scale, 23 * $scale)
+    $path.AddArc(3 * $scale, 21 * $scale, 4 * $scale, 4 * $scale, 180, -90)
+    $path.AddLine(5 * $scale, 25 * $scale, 18 * $scale, 25 * $scale)
+    $graphics.DrawPath($pen, $path)
+    $path.Dispose()
+    $graphics.DrawLine($pen, 12.5 * $scale, 25 * $scale, 12.5 * $scale, 28 * $scale)
+    $graphics.DrawLine($pen, 9 * $scale, 28 * $scale, 16 * $scale, 28 * $scale)
+    Draw-RoundedRectangle $graphics $pen ([System.Drawing.RectangleF]::new(20.5 * $scale, 16 * $scale, 8.5 * $scale, 13 * $scale)) (1.5 * $scale)
 }
 
 function New-Frame([string]$state, [int]$size) {
-    if ($state -eq 'taskbar-reference' -and $null -ne $script:ReferenceBitmap) {
-        $referenceFrame = [System.Drawing.Bitmap]::new($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-        $referenceGraphics = [System.Drawing.Graphics]::FromImage($referenceFrame)
-        $referenceGraphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
-        $referenceGraphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-        $referenceGraphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-        $referenceGraphics.Clear([System.Drawing.Color]::Transparent)
-        $referenceGraphics.DrawImage($script:ReferenceBitmap, [System.Drawing.Rectangle]::new(0, 0, $size, $size))
-        $referenceGraphics.Dispose()
-        return $referenceFrame
-    }
     $bitmap = [System.Drawing.Bitmap]::new($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
     $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
     $graphics.Clear([System.Drawing.Color]::Transparent)
-    $scale = [float]($size / 64.0)
-
-    switch ($state) {
-        'paused' { $accent = New-Color 255 166 184 211; $dim = New-Color 220 101 120 148 }
-        'error' { $accent = New-Color 255 255 79 78; $dim = New-Color 220 195 46 48 }
-        default { $accent = New-Color 255 53 231 255; $dim = New-Color 220 26 139 204 }
+    if ($state -eq 'brand' -and $size -ge 64) {
+        $scale = [float]($size / 256.0)
+        $gradient = [System.Drawing.Drawing2D.LinearGradientBrush]::new(
+            [System.Drawing.PointF]::new(35 * $scale, 223 * $scale),
+            [System.Drawing.PointF]::new(205 * $scale, 32 * $scale), $gold, $white)
+        $blend = [System.Drawing.Drawing2D.ColorBlend]::new(3)
+        $blend.Colors = [System.Drawing.Color[]]@($gold, [System.Drawing.ColorTranslator]::FromHtml('#E1CAA3'), $white)
+        $blend.Positions = [float[]]@(0, 0.56, 1)
+        $gradient.InterpolationColors = $blend
+        $pen = [System.Drawing.Pen]::new($gradient, [float](9 * $scale))
+        $pen.StartCap = $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+        $pen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
+        Draw-RoundedRectangle $graphics $pen ([System.Drawing.RectangleF]::new(28 * $scale, 82 * $scale, 166 * $scale, 108 * $scale)) (12 * $scale)
+        $graphics.DrawLine($pen, 111 * $scale, 190 * $scale, 111 * $scale, 209 * $scale)
+        $graphics.DrawLine($pen, 83 * $scale, 209 * $scale, 139 * $scale, 209 * $scale)
+        Draw-RoundedRectangle $graphics $pen ([System.Drawing.RectangleF]::new(164 * $scale, 118 * $scale, 64 * $scale, 110 * $scale)) (10 * $scale)
+        $pen.Width = [float](8 * $scale)
+        $graphics.DrawPolygon($pen, [System.Drawing.PointF[]]@(
+            [System.Drawing.PointF]::new(128 * $scale, 26 * $scale),
+            [System.Drawing.PointF]::new(143 * $scale, 41 * $scale),
+            [System.Drawing.PointF]::new(128 * $scale, 56 * $scale),
+            [System.Drawing.PointF]::new(113 * $scale, 41 * $scale)))
+        $pen.Dispose()
+        $gradient.Dispose()
     }
-    $stroke = [Math]::Max(1.2, 4 * $scale)
-    $ring = [System.Drawing.RectangleF]::new(5 * $scale, 5 * $scale, 54 * $scale, 54 * $scale)
-    if ($size -ge 24) {
-        $halo = [System.Drawing.Pen]::new((New-Color 35 $accent.R $accent.G $accent.B), [Math]::Max(2, 9 * $scale))
-        $graphics.DrawEllipse($halo, $ring)
-        $halo.Dispose()
-    }
-
-    $ringPen = [System.Drawing.Pen]::new($dim, $stroke)
-    if ($state -eq 'recognizing') {
-        $graphics.DrawArc($ringPen, $ring, -82, 286)
-        $graphics.DrawArc($ringPen, $ring, 218, 22)
-        $center = [System.Drawing.PointF]::new($ring.Left + $ring.Width / 2, $ring.Top + $ring.Height / 2)
-        $radius = $ring.Width / 2
-        $dotBrush = [System.Drawing.SolidBrush]::new($accent)
-        foreach ($angle in @(-64, -48, -32, -16)) {
-            $radians = $angle * [Math]::PI / 180
-            $x = $center.X + [float][Math]::Cos($radians) * $radius
-            $y = $center.Y + [float][Math]::Sin($radians) * $radius
-            $dot = [Math]::Max(1.2, 2.6 * $scale)
-            $graphics.FillEllipse($dotBrush, $x - $dot / 2, $y - $dot / 2, $dot, $dot)
+    else {
+        $scale = [float]($size / 32.0)
+        $accent = switch ($state) { 'error' { $copper } 'paused' { $sage } 'unmatched' { $sage } default { $gold } }
+        $outline = New-Pen $accent ([Math]::Max(1.1, 1.8 * $scale))
+        Draw-Screens $graphics $outline $scale
+        $outline.Dispose()
+        $markColor = if ($state -eq 'generic') { $white } else { $accent }
+        $pen = New-Pen $markColor ([Math]::Max(1.1, 1.8 * $scale))
+        switch ($state) {
+            'normal' {
+                $graphics.DrawLines($pen, [System.Drawing.PointF[]]@(
+                    [System.Drawing.PointF]::new(12 * $scale, 5 * $scale),
+                    [System.Drawing.PointF]::new(15 * $scale, 8 * $scale),
+                    [System.Drawing.PointF]::new(21 * $scale, 2 * $scale)))
+            }
+            { $_ -in @('generic', 'brand') } {
+                $graphics.DrawPolygon($pen, [System.Drawing.PointF[]]@(
+                    [System.Drawing.PointF]::new(16 * $scale, 1.5 * $scale),
+                    [System.Drawing.PointF]::new(19.5 * $scale, 5 * $scale),
+                    [System.Drawing.PointF]::new(16 * $scale, 8.5 * $scale),
+                    [System.Drawing.PointF]::new(12.5 * $scale, 5 * $scale)))
+            }
+            'unmatched' { $graphics.DrawLine($pen, 12 * $scale, 5 * $scale, 20 * $scale, 5 * $scale) }
+            'paused' {
+                $graphics.DrawLine($pen, 13 * $scale, 2 * $scale, 13 * $scale, 8 * $scale)
+                $graphics.DrawLine($pen, 19 * $scale, 2 * $scale, 19 * $scale, 8 * $scale)
+            }
+            'error' {
+                $graphics.DrawLine($pen, 16 * $scale, 1.5 * $scale, 16 * $scale, 5 * $scale)
+                $brush = [System.Drawing.SolidBrush]::new($accent)
+                $dot = [Math]::Max(1, 1.8 * $scale)
+                $graphics.FillEllipse($brush, 16 * $scale - $dot / 2, 8.5 * $scale - $dot / 2, $dot, $dot)
+                $brush.Dispose()
+            }
+            'recognizing' {
+                $brush = [System.Drawing.SolidBrush]::new($accent)
+                $dot = [Math]::Max(1, 2 * $scale)
+                foreach ($x in @(11, 16, 21)) {
+                    $graphics.FillEllipse($brush, $x * $scale - $dot / 2, 5 * $scale - $dot / 2, $dot, $dot)
+                }
+                $brush.Dispose()
+            }
         }
-        $dotBrush.Dispose()
-    }
-    elseif ($state -eq 'error') {
-        $graphics.DrawArc($ringPen, $ring, -48, 250)
-        $graphics.DrawArc($ringPen, $ring, 238, 42)
-    }
-    else { $graphics.DrawEllipse($ringPen, $ring) }
-    $ringPen.Dispose()
-
-    $screenPen = [System.Drawing.Pen]::new($accent, [Math]::Max(1.3, 3.6 * $scale))
-    $screenPen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
-    $secondaryPen = [System.Drawing.Pen]::new($dim, [Math]::Max(1.1, 3.1 * $scale))
-    $secondaryPen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
-    Draw-RoundedRectangle $graphics $screenPen ([System.Drawing.RectangleF]::new(15 * $scale, 24 * $scale, 28 * $scale, 19 * $scale)) ([Math]::Max(1, 3 * $scale))
-    $graphics.DrawLine($screenPen, 29 * $scale, 43 * $scale, 29 * $scale, 49 * $scale)
-    $graphics.DrawLine($screenPen, 23 * $scale, 49 * $scale, 35 * $scale, 49 * $scale)
-    if ($state -eq 'error') { $secondaryPen.DashStyle = [System.Drawing.Drawing2D.DashStyle]::Dash }
-    Draw-RoundedRectangle $graphics $secondaryPen ([System.Drawing.RectangleF]::new(38 * $scale, 32 * $scale, 17 * $scale, 14 * $scale)) ([Math]::Max(1, 2 * $scale))
-    $graphics.DrawLine($secondaryPen, 41 * $scale, 48 * $scale, 54 * $scale, 48 * $scale)
-    $screenPen.Dispose(); $secondaryPen.Dispose()
-
-    if ($state -eq 'paused') {
-        $pause = [System.Drawing.SolidBrush]::new($accent)
-        $graphics.FillRectangle($pause, 27 * $scale, 10 * $scale, [Math]::Max(1.5, 4.2 * $scale), 9 * $scale)
-        $graphics.FillRectangle($pause, 35 * $scale, 10 * $scale, [Math]::Max(1.5, 4.2 * $scale), 9 * $scale)
-        $pause.Dispose()
-    }
-    elseif ($state -eq 'error') {
-        $warning = [System.Drawing.PointF[]]@(
-            [System.Drawing.PointF]::new(50 * $scale, 42 * $scale),
-            [System.Drawing.PointF]::new(60 * $scale, 58 * $scale),
-            [System.Drawing.PointF]::new(40 * $scale, 58 * $scale))
-        $fill = [System.Drawing.SolidBrush]::new($accent)
-        $graphics.FillPolygon($fill, $warning)
-        $mark = [System.Drawing.Pen]::new((New-Color 255 36 21 34), [Math]::Max(1.2, 2.5 * $scale))
-        $mark.StartCap = [System.Drawing.Drawing2D.LineCap]::Round; $mark.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-        $graphics.DrawLine($mark, 50 * $scale, 47 * $scale, 50 * $scale, 52 * $scale)
-        $dark = [System.Drawing.SolidBrush]::new((New-Color 255 36 21 34))
-        $graphics.FillEllipse($dark, 49 * $scale, 54 * $scale, [Math]::Max(1.4, 2.5 * $scale), [Math]::Max(1.4, 2.5 * $scale))
-        $fill.Dispose(); $mark.Dispose(); $dark.Dispose()
-    }
-    elseif ($state -eq 'normal') {
-        $dot = [System.Drawing.SolidBrush]::new($accent)
-        $diameter = [Math]::Max(2, 8 * $scale)
-        $graphics.FillEllipse($dot, 20 * $scale - $diameter / 2, 52 * $scale - $diameter / 2, $diameter, $diameter)
-        $orbitDot = [Math]::Max(1.5, 4 * $scale)
-        $graphics.FillEllipse($dot, 49 * $scale - $orbitDot / 2, 12 * $scale - $orbitDot / 2, $orbitDot, $orbitDot)
-        $dot.Dispose()
+        $pen.Dispose()
     }
     $graphics.Dispose()
     return $bitmap
 }
 
-function Get-PngBytes([System.Drawing.Bitmap]$bitmap) {
-    $stream = [System.IO.MemoryStream]::new()
-    $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
-    $bytes = $stream.ToArray()
-    $stream.Dispose()
-    return ,$bytes
+function Write-Ico([string]$path, [string]$state, [int[]]$sizes) {
+    $frames = foreach ($size in $sizes) {
+        $frame = New-Frame $state $size
+        $stream = [System.IO.MemoryStream]::new()
+        try {
+            $frame.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+            ,$stream.ToArray()
+        }
+        finally { $frame.Dispose(); $stream.Dispose() }
+    }
+    $stream = [System.IO.File]::Create($path)
+    $writer = [System.IO.BinaryWriter]::new($stream)
+    try {
+        $writer.Write([UInt16]0)
+        $writer.Write([UInt16]1)
+        $writer.Write([UInt16]$frames.Count)
+        $offset = 6 + 16 * $frames.Count
+        for ($i = 0; $i -lt $frames.Count; $i++) {
+            $size = $sizes[$i]
+            $writer.Write([Byte]$(if ($size -ge 256) { 0 } else { $size }))
+            $writer.Write([Byte]$(if ($size -ge 256) { 0 } else { $size }))
+            $writer.Write([Byte]0)
+            $writer.Write([Byte]0)
+            $writer.Write([UInt16]1)
+            $writer.Write([UInt16]32)
+            $writer.Write([UInt32]$frames[$i].Length)
+            $writer.Write([UInt32]$offset)
+            $offset += $frames[$i].Length
+        }
+        foreach ($frame in $frames) { $writer.Write($frame) }
+    }
+    finally { $writer.Dispose(); $stream.Dispose() }
 }
 
-function Write-Ico([string]$path, [string]$state, [int[]]$sizes) {
-    $frames = @()
-    foreach ($size in $sizes) {
-        $frame = New-Frame $state $size
-        try { $frames += ,(Get-PngBytes $frame) } finally { $frame.Dispose() }
+function Write-TraySvg([string]$state) {
+    $accent = switch ($state) { 'error' { '#D5A085' } 'paused' { '#A5B5A9' } 'unmatched' { '#A5B5A9' } default { '#D2B47A' } }
+    $mark = switch ($state) {
+        'normal' { '<path d="m12 5 3 3 6-6"/>' }
+        'generic' { '<path d="m16 1.5 3.5 3.5-3.5 3.5-3.5-3.5Z" stroke="#F3EBDC"/>' }
+        'unmatched' { '<path d="M12 5h8"/>' }
+        'paused' { '<path d="M13 2v6M19 2v6"/>' }
+        'error' { '<path d="M16 1.5V5"/><circle cx="16" cy="8.5" r=".9" fill="#D5A085" stroke="none"/>' }
+        'recognizing' { '<g fill="#D2B47A" stroke="none"><circle cx="11" cy="5" r="1"/><circle cx="16" cy="5" r="1"/><circle cx="21" cy="5" r="1"/></g>' }
     }
-    $stream = [System.IO.File]::Open($path, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read)
-    $writer = [System.IO.BinaryWriter]::new($stream)
-    $writer.Write([UInt16]0); $writer.Write([UInt16]1); $writer.Write([UInt16]$frames.Count)
-    $offset = 6 + 16 * $frames.Count
-    for ($i = 0; $i -lt $frames.Count; $i++) {
-        $size = $sizes[$i]
-        $writer.Write([Byte]$(if ($size -ge 256) { 0 } else { $size }))
-        $writer.Write([Byte]$(if ($size -ge 256) { 0 } else { $size }))
-        $writer.Write([Byte]0); $writer.Write([Byte]0); $writer.Write([UInt16]1); $writer.Write([UInt16]32)
-        $writer.Write([UInt32]$frames[$i].Length); $writer.Write([UInt32]$offset)
-        $offset += $frames[$i].Length
-    }
-    foreach ($frame in $frames) { $writer.Write($frame) }
-    $writer.Flush(); $writer.Dispose(); $stream.Dispose()
+    $svg = @"
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 32 32" role="img" aria-labelledby="title desc">
+  <title id="title">SyncWallpaper $state tray icon</title>
+  <desc id="desc">Hollow landscape and portrait displays with an independent $state state mark. Transparent background and screen interiors.</desc>
+  <g fill="none" stroke="$accent" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 14v-1a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h13M12.5 25v3M9 28h7"/>
+    <rect x="20.5" y="16" width="8.5" height="13" rx="1.5"/>
+    $mark
+  </g>
+</svg>
+"@
+    [System.IO.File]::WriteAllText((Join-Path $trayRoot "tray_$state.svg"), $svg)
 }
 
 $sizes = @(16, 20, 24, 32, 48, 64)
-foreach ($state in @('normal', 'paused', 'recognizing', 'error')) {
+foreach ($state in $States) {
     foreach ($size in $sizes) {
         $frame = New-Frame $state $size
-        try { $frame.Save((Join-Path $trayRoot ("tray_{0}_{1}.png" -f $state, $size)), [System.Drawing.Imaging.ImageFormat]::Png) }
+        try { $frame.Save((Join-Path $trayRoot "tray_${state}_$size.png"), [System.Drawing.Imaging.ImageFormat]::Png) }
         finally { $frame.Dispose() }
     }
-    Write-Ico (Join-Path $trayRoot ("tray_{0}.ico" -f $state)) $state $sizes
+    Write-Ico (Join-Path $trayRoot "tray_$state.ico") $state $sizes
+    Write-TraySvg $state
 }
 
-$referencePath = Join-Path $assetRoot 'TaskbarIconReference.png'
-if (Test-Path -LiteralPath $referencePath) {
-    $script:ReferenceBitmap = Remove-EdgeBackground $referencePath
-    $transparentReferencePath = Join-Path $assetRoot 'TaskbarIconReferenceTransparent.png'
-    $script:ReferenceBitmap.Save($transparentReferencePath, [System.Drawing.Imaging.ImageFormat]::Png)
+if (-not $SkipTaskbarAssets) {
+    foreach ($size in @(16, 32, 64, 256)) {
+        $frame = New-Frame 'brand' $size
+        try { $frame.Save((Join-Path $assetRoot "AppIcon_$size.png"), [System.Drawing.Imaging.ImageFormat]::Png) }
+        finally { $frame.Dispose() }
+    }
+    Write-Ico (Join-Path $assetRoot 'AppIcon.ico') 'brand' @(16, 20, 24, 32, 48, 64, 256)
 }
-else {
-    $script:ReferenceBitmap = $null
-}
-
-foreach ($size in @(16, 32, 64, 256)) {
-    $frame = New-Frame 'taskbar-reference' $size
-    try { $frame.Save((Join-Path $assetRoot ("AppIcon_{0}.png" -f $size)), [System.Drawing.Imaging.ImageFormat]::Png) }
-    finally { $frame.Dispose() }
-}
-Write-Ico (Join-Path $assetRoot 'AppIcon.ico') 'taskbar-reference' @(16, 20, 24, 32, 48, 64, 256)
-if ($null -ne $script:ReferenceBitmap) { $script:ReferenceBitmap.Dispose() }
-Write-Output "Generated tray assets in $trayRoot and taskbar AppIcon.ico."
+Write-Output "Generated hollow antique-gold icons in $assetRoot."

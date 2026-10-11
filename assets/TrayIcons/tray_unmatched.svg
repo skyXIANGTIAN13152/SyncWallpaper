@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 32 32" role="img" aria-labelledby="title desc">
+  <title id="title">SyncWallpaper unmatched tray icon</title>
+  <desc id="desc">Hollow landscape and portrait displays with an independent unmatched state mark. Transparent background and screen interiors.</desc>
+  <g fill="none" stroke="#A5B5A9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 14v-1a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h13M12.5 25v3M9 28h7"/>
+    <rect x="20.5" y="16" width="8.5" height="13" rx="1.5"/>
+    <path d="M12 5h8"/>
+  </g>
+</svg>

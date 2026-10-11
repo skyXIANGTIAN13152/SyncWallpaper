@@ -47,6 +47,15 @@ public static class ThemeManager
             ((SolidColorBrush)resources["Purple"]).Color, 0);
         accent.Freeze();
         resources["AccentGradient"] = accent;
+        foreach (var (key, source, alpha) in new[] {
+            ("TranslucentPanel", "PanelBackground", (byte)224),
+            ("TranslucentSidebar", "SidebarBackground", (byte)232),
+            ("TranslucentHeader", "PanelBackground", (byte)225) })
+        {
+            var color = ((SolidColorBrush)resources[source]).Color;
+            var brush = new SolidColorBrush(System.Windows.Media.Color.FromArgb(alpha, color.R, color.G, color.B));
+            brush.Freeze(); resources[key] = brush;
+        }
         return resources;
     }
 }

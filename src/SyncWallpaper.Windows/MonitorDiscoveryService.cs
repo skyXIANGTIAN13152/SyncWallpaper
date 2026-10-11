@@ -33,21 +33,7 @@ public sealed class MonitorDiscoveryService
 
     private static List<MonitorIdentity> QueryDisplayConfigMonitors()
     {
-        var status = GetDisplayConfigBufferSizes(QdcOnlyActivePaths, out var pathCount, out var modeCount);
-        if (status != 0) Marshal.ThrowExceptionForHR(status);
-        var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
-        var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
-        status = QueryDisplayConfig(QdcOnlyActivePaths, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
-        if (status == ErrorInsufficientBuffer)
-        {
-            status = GetDisplayConfigBufferSizes(QdcOnlyActivePaths, out pathCount, out modeCount);
-            if (status != 0) Marshal.ThrowExceptionForHR(status);
-            paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
-            modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
-            status = QueryDisplayConfig(QdcOnlyActivePaths, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
-        }
-        if (status != 0) Marshal.ThrowExceptionForHR(status);
-
+        var (paths, modes, pathCount) = QueryActiveConfiguration();
         var wmi = ReadWmiMonitorIds();
         var screens = Screen.AllScreens;
         var result = new List<MonitorIdentity>();
@@ -115,6 +101,44 @@ public sealed class MonitorDiscoveryService
             result.Add(identity);
         }
         return result;
+    }
+
+    // A lightweight topology read for wallpaper transactions: no WMI or
+    // fingerprint discovery, and no remembered disconnected wallpaper entries.
+    internal static IReadOnlyList<string> GetActiveMonitorDevicePaths()
+    {
+        var (paths, _, pathCount) = QueryActiveConfiguration();
+        var result = new List<string>();
+        for (var index = 0; index < pathCount; index++)
+        {
+            var path = paths[index];
+            var target = GetTargetName(path.targetInfo.adapterId, path.targetInfo.id);
+            if (!string.IsNullOrWhiteSpace(target.MonitorDevicePath)) result.Add(target.MonitorDevicePath);
+        }
+        return result;
+    }
+
+    private static (DISPLAYCONFIG_PATH_INFO[] Paths, DISPLAYCONFIG_MODE_INFO[] Modes, uint PathCount) QueryActiveConfiguration()
+    {
+        var status = GetDisplayConfigBufferSizes(QdcOnlyActivePaths, out var pathCount, out var modeCount);
+        ThrowDisplayError(status);
+        var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
+        var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
+        status = QueryDisplayConfig(QdcOnlyActivePaths, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
+        if (status == ErrorInsufficientBuffer)
+        {
+            ThrowDisplayError(GetDisplayConfigBufferSizes(QdcOnlyActivePaths, out pathCount, out modeCount));
+            paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
+            modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
+            status = QueryDisplayConfig(QdcOnlyActivePaths, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
+        }
+        ThrowDisplayError(status);
+        return (paths, modes, pathCount);
+    }
+
+    private static void ThrowDisplayError(int status)
+    {
+        if (status != 0) Marshal.ThrowExceptionForHR(status > 0 ? unchecked((int)(0x80070000u | (uint)status)) : status);
     }
 
     private static MonitorBounds FindScreenBounds(Screen[] screens, string sourceName, DISPLAYCONFIG_SOURCE_MODE source)

@@ -11,7 +11,13 @@ public sealed record AppTheme(string Id, string Name, string Description, IReadO
 
 public static class AppThemeCatalog
 {
-    public const string DefaultId = "Aurora";
+    public const string DefaultId = "Mystery";
+
+    public static AppTheme Mystery { get; } = Create("Mystery", "秘境", "深墨绿 · 古金 · 暖白星轨",
+        "#0D1C19", "#102119", "#142722", "#193024", "#13291F", "#0C2017", "#172D22",
+        "#F3EBDC", "#A5B5A9", "#A0B09F", "#526457", "#344B3B", "#263E2E", "#2C4834",
+        "#364B31", "#F3EBDC", "#D2B47A", "#C0CBAE", "#E1CAA3", "#19221A", "#E3C891",
+        "#C1D0AC", "#D5A085", "#DAC28C");
 
     public static AppTheme Aurora { get; } = Create("Aurora", "极光科技", "深空蓝 · 冰青 · 星云紫",
         "#0D1322", "#10192B", "#141F34", "#1B2340", "#18253D", "#0E182B", "#17243A",
@@ -31,9 +37,9 @@ public static class AppThemeCatalog
         "#D5E4FF", "#13346C", "#1252B8", "#2D57B3", "#7343AD", "#FFFFFF", "#0F4294",
         "#177348", "#B72F46", "#865706");
 
-    public static IReadOnlyList<AppTheme> All { get; } = Array.AsReadOnly(new[] { Aurora, Graphite, Daylight });
+    public static IReadOnlyList<AppTheme> All { get; } = Array.AsReadOnly(new[] { Mystery, Aurora, Graphite, Daylight });
 
-    public static AppTheme Get(string? id) => All.FirstOrDefault(x => x.Id.Equals(id, StringComparison.OrdinalIgnoreCase)) ?? Aurora;
+    public static AppTheme Get(string? id) => All.FirstOrDefault(x => x.Id.Equals(id, StringComparison.OrdinalIgnoreCase)) ?? Mystery;
 
     private static AppTheme Create(string id, string name, string description, params string[] values)
     {

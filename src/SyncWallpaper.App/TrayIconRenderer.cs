@@ -6,13 +6,16 @@ using System.IO;
 namespace SyncWallpaper.App;
 
 /// <summary>
-/// Renders the small monitor-topology icon used by the Windows notification area.
-/// It intentionally contains no nebula, eye, text or fine HUD marks so that the
-/// silhouette remains legible at 16 px and at high-DPI scaling factors.
+/// Hollow landscape/portrait screens, with an independent state mark above.
+/// No backing disc, filled screens, halo, or animation is needed at tray sizes.
 /// </summary>
 internal static class TrayIconRenderer
 {
     private static readonly int[] IconSizes = [16, 20, 24, 32, 48, 64];
+    private static readonly Color Gold = Color.FromArgb(210, 180, 122);
+    private static readonly Color WarmWhite = Color.FromArgb(243, 235, 220);
+    private static readonly Color Sage = Color.FromArgb(165, 181, 169);
+    private static readonly Color Copper = Color.FromArgb(213, 160, 133);
 
     public static Icon Create(TrayIconState state)
     {
@@ -29,153 +32,94 @@ internal static class TrayIconRenderer
 
         var bitmap = new Bitmap(size, size, PixelFormat.Format32bppArgb);
         using var graphics = Graphics.FromImage(bitmap);
-        graphics.CompositingMode = CompositingMode.SourceCopy;
         graphics.SmoothingMode = SmoothingMode.AntiAlias;
         graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
         graphics.Clear(Color.Transparent);
 
-        var scale = size / 64f;
+        var scale = size / 32f;
         var accent = state switch
         {
-            TrayIconState.Error => Color.FromArgb(255, 255, 79, 78),
-            TrayIconState.Paused => Color.FromArgb(255, 166, 184, 211),
-            _ => Color.FromArgb(255, 53, 231, 255)
+            TrayIconState.Error => Copper,
+            TrayIconState.Paused or TrayIconState.Unmatched => Sage,
+            _ => Gold
         };
-        var accentDim = state switch
-        {
-            TrayIconState.Error => Color.FromArgb(220, 195, 46, 48),
-            TrayIconState.Paused => Color.FromArgb(205, 101, 120, 148),
-            _ => Color.FromArgb(220, 26, 139, 204)
-        };
-        var stroke = Math.Max(1.2f, 4f * scale);
-        var ringRect = new RectangleF(5f * scale, 5f * scale, 54f * scale, 54f * scale);
-
-        // A soft static halo is only used for the larger source frames. It is
-        // baked into the bitmap and does not create a rendering loop in the app.
-        if (size >= 24)
-        {
-            using var halo = new Pen(Color.FromArgb(35, accent), Math.Max(2f, 9f * scale));
-            graphics.DrawEllipse(halo, ringRect);
-        }
-
-        using (var ringPen = new Pen(accentDim, stroke))
-        {
-            if (state == TrayIconState.Recognizing)
-            {
-                graphics.DrawArc(ringPen, ringRect, -82, 286);
-                graphics.DrawArc(ringPen, ringRect, 218, 22);
-                DrawScanDots(graphics, ringRect, accent, scale);
-            }
-            else if (state == TrayIconState.Error)
-            {
-                graphics.DrawArc(ringPen, ringRect, -48, 250);
-                graphics.DrawArc(ringPen, ringRect, 238, 42);
-            }
-            else
-            {
-                graphics.DrawEllipse(ringPen, ringRect);
-            }
-        }
-
-        DrawMonitorTopology(graphics, state, accent, accentDim, scale);
-
-        if (state == TrayIconState.Paused)
-            DrawPauseMark(graphics, accent, scale);
-        else if (state == TrayIconState.Error)
-            DrawWarningMark(graphics, accent, scale);
-        else if (state == TrayIconState.Normal)
-            DrawNormalStatusDot(graphics, accent, scale);
-
+        using var outline = CreatePen(accent, Math.Max(1.1f, 1.8f * scale));
+        DrawScreens(graphics, outline, scale);
+        DrawStateMark(graphics, state, accent, scale);
         return bitmap;
     }
 
-    private static void DrawMonitorTopology(Graphics graphics, TrayIconState state, Color accent, Color accentDim, float scale)
+    private static Pen CreatePen(Color color, float width) => new(color, width)
     {
-        var screenPen = new Pen(accent, Math.Max(1.3f, 3.6f * scale)) { LineJoin = LineJoin.Round };
-        var secondaryPen = new Pen(accentDim, Math.Max(1.1f, 3.1f * scale)) { LineJoin = LineJoin.Round };
-        using (screenPen)
-        using (secondaryPen)
+        StartCap = LineCap.Round,
+        EndCap = LineCap.Round,
+        LineJoin = LineJoin.Round
+    };
+
+    private static void DrawScreens(Graphics graphics, Pen pen, float scale)
+    {
+        // Leave a real gap where the portrait display overlaps the landscape
+        // display. At 16 px, crossed outlines would collapse into a solid blob.
+        using var landscape = new GraphicsPath();
+        landscape.AddLine(22f * scale, 14f * scale, 22f * scale, 13f * scale);
+        landscape.AddArc(18f * scale, 11f * scale, 4f * scale, 4f * scale, 0, -90);
+        landscape.AddLine(20f * scale, 11f * scale, 5f * scale, 11f * scale);
+        landscape.AddArc(3f * scale, 11f * scale, 4f * scale, 4f * scale, 270, -90);
+        landscape.AddLine(3f * scale, 13f * scale, 3f * scale, 23f * scale);
+        landscape.AddArc(3f * scale, 21f * scale, 4f * scale, 4f * scale, 180, -90);
+        landscape.AddLine(5f * scale, 25f * scale, 18f * scale, 25f * scale);
+        graphics.DrawPath(pen, landscape);
+        graphics.DrawLine(pen, 12.5f * scale, 25f * scale, 12.5f * scale, 28f * scale);
+        graphics.DrawLine(pen, 9f * scale, 28f * scale, 16f * scale, 28f * scale);
+        graphics.DrawRoundedRectangle(pen, new RectangleF(20.5f * scale, 16f * scale, 8.5f * scale, 13f * scale), 1.5f * scale);
+    }
+
+    private static void DrawStateMark(Graphics graphics, TrayIconState state, Color accent, float scale)
+    {
+        using var pen = CreatePen(state == TrayIconState.Generic ? WarmWhite : accent, Math.Max(1.1f, 1.8f * scale));
+        switch (state)
         {
-            var monitor = new RectangleF(15f * scale, 24f * scale, 28f * scale, 19f * scale);
-            graphics.DrawRoundedRectangle(screenPen, monitor, Math.Max(1f, 3f * scale));
-            graphics.DrawLine(screenPen, 29f * scale, 43f * scale, 29f * scale, 49f * scale);
-            graphics.DrawLine(screenPen, 23f * scale, 49f * scale, 35f * scale, 49f * scale);
-
-            // The second display is deliberately offset, matching the supplied
-            // taskbar reference while remaining recognizable at 16 px.
-            var companion = new RectangleF(38f * scale, 32f * scale, 17f * scale, 14f * scale);
-            if (state == TrayIconState.Error)
-            {
-                var oldStyle = secondaryPen.DashStyle;
-                secondaryPen.DashStyle = DashStyle.Dash;
-                graphics.DrawRoundedRectangle(secondaryPen, companion, Math.Max(1f, 2f * scale));
-                secondaryPen.DashStyle = oldStyle;
-            }
-            else
-            {
-                graphics.DrawRoundedRectangle(secondaryPen, companion, Math.Max(1f, 2f * scale));
-            }
-
-            graphics.DrawLine(secondaryPen, 41f * scale, 48f * scale, 54f * scale, 48f * scale);
-            if (state == TrayIconState.Error)
-            {
-                using var crack = new Pen(accent, Math.Max(1.2f, 3f * scale)) { LineJoin = LineJoin.Round };
-                graphics.DrawLines(crack,
+            case TrayIconState.Normal:
+                graphics.DrawLines(pen,
                 [
-                    new PointF(35f * scale, 44f * scale),
-                    new PointF(38f * scale, 47f * scale),
-                    new PointF(36f * scale, 50f * scale)
+                    new PointF(12f * scale, 5f * scale),
+                    new PointF(15f * scale, 8f * scale),
+                    new PointF(21f * scale, 2f * scale)
                 ]);
-            }
+                break;
+            case TrayIconState.Generic:
+                graphics.DrawPolygon(pen,
+                [
+                    new PointF(16f * scale, 1.5f * scale),
+                    new PointF(19.5f * scale, 5f * scale),
+                    new PointF(16f * scale, 8.5f * scale),
+                    new PointF(12.5f * scale, 5f * scale)
+                ]);
+                break;
+            case TrayIconState.Unmatched:
+                graphics.DrawLine(pen, 12f * scale, 5f * scale, 20f * scale, 5f * scale);
+                break;
+            case TrayIconState.Paused:
+                graphics.DrawLine(pen, 13f * scale, 2f * scale, 13f * scale, 8f * scale);
+                graphics.DrawLine(pen, 19f * scale, 2f * scale, 19f * scale, 8f * scale);
+                break;
+            case TrayIconState.Error:
+                graphics.DrawLine(pen, 16f * scale, 1.5f * scale, 16f * scale, 5f * scale);
+                using (var brush = new SolidBrush(accent))
+                {
+                    var dot = Math.Max(1f, 1.8f * scale);
+                    graphics.FillEllipse(brush, 16f * scale - dot / 2f, 8.5f * scale - dot / 2f, dot, dot);
+                }
+                break;
+            case TrayIconState.Recognizing:
+                using (var brush = new SolidBrush(accent))
+                {
+                    var dot = Math.Max(1f, 2f * scale);
+                    foreach (var x in new[] { 11f, 16f, 21f })
+                        graphics.FillEllipse(brush, x * scale - dot / 2f, 5f * scale - dot / 2f, dot, dot);
+                }
+                break;
         }
-    }
-
-    private static void DrawScanDots(Graphics graphics, RectangleF ringRect, Color accent, float scale)
-    {
-        using var brush = new SolidBrush(accent);
-        var center = new PointF(ringRect.Left + ringRect.Width / 2f, ringRect.Top + ringRect.Height / 2f);
-        var radius = ringRect.Width / 2f;
-        foreach (var angle in new[] { -64f, -48f, -32f, -16f })
-        {
-            var radians = angle * Math.PI / 180d;
-            var x = center.X + (float)Math.Cos(radians) * radius;
-            var y = center.Y + (float)Math.Sin(radians) * radius;
-            var dot = Math.Max(1.2f, 2.6f * scale);
-            graphics.FillEllipse(brush, x - dot / 2f, y - dot / 2f, dot, dot);
-        }
-    }
-
-    private static void DrawNormalStatusDot(Graphics graphics, Color accent, float scale)
-    {
-        using var brush = new SolidBrush(accent);
-        var diameter = Math.Max(2f, 8f * scale);
-        graphics.FillEllipse(brush, 20f * scale - diameter / 2f, 52f * scale - diameter / 2f, diameter, diameter);
-        var orbitDot = Math.Max(1.5f, 4f * scale);
-        graphics.FillEllipse(brush, 49f * scale - orbitDot / 2f, 12f * scale - orbitDot / 2f, orbitDot, orbitDot);
-    }
-
-    private static void DrawPauseMark(Graphics graphics, Color accent, float scale)
-    {
-        using var brush = new SolidBrush(accent);
-        var width = Math.Max(1.5f, 4.2f * scale);
-        graphics.FillRectangle(brush, 27f * scale, 10f * scale, width, 9f * scale);
-        graphics.FillRectangle(brush, 35f * scale, 10f * scale, width, 9f * scale);
-    }
-
-    private static void DrawWarningMark(Graphics graphics, Color accent, float scale)
-    {
-        var points = new[]
-        {
-            new PointF(49f * scale, 42f * scale),
-            new PointF(59f * scale, 58f * scale),
-            new PointF(39f * scale, 58f * scale)
-        };
-        using var fill = new SolidBrush(accent);
-        using var textBrush = new SolidBrush(Color.FromArgb(255, 25, 22, 30));
-        graphics.FillPolygon(fill, points);
-        using var markPen = new Pen(textBrush, Math.Max(1.2f, 2.5f * scale)) { StartCap = LineCap.Round, EndCap = LineCap.Round };
-        graphics.DrawLine(markPen, 49f * scale, 47f * scale, 49f * scale, 52f * scale);
-        graphics.FillEllipse(textBrush, 48f * scale, 54f * scale, Math.Max(1.4f, 2.5f * scale), Math.Max(1.4f, 2.5f * scale));
     }
 
     private static byte[] EncodePng(Bitmap bitmap)

@@ -31,14 +31,8 @@ public sealed class AppRuntime : IDisposable
     public bool IsRecognizing { get; private set; }
     public string StartupText => _startup.IsEnabled ? "已启用" : "未启用";
     public IReadOnlyList<DiagnosticEvent> RecentLogs => _log.Recent;
-    public TrayIconState TrayVisualState => IsRecognizing
-        ? TrayIconState.Recognizing
-        : !Settings.AutoMatchEnabled || StatusText is "已暂停" or "安全模式"
-            || StatusText.StartsWith("验证模式", StringComparison.Ordinal)
-            ? TrayIconState.Paused
-            : StatusText is "需要确认" or "保持当前壁纸" or "应用未完成" or "应用失败" or "未发现显示器"
-                ? TrayIconState.Error
-                : TrayIconState.Normal;
+    public TrayIconState TrayVisualState => TrayIconStateResolver.Resolve(
+        IsRecognizing, Settings.AutoMatchEnabled, StatusText, LastMatch?.IsGeneric == true);
 
     public event EventHandler? StateChanged;
 
@@ -102,13 +96,14 @@ public sealed class AppRuntime : IDisposable
         _library = new WallpaperLibraryService(Store);
         Library = _library.Refresh().Document;
         _wallpaperRenderer = new WallpaperRenderService(Paths);
-        _wallpaperRenderer.ConfigureCacheLimit(Settings.LowPerformanceMode ? 128L * 1024 * 1024 : 512L * 1024 * 1024);
         _apply = new WallpaperApplyService(_wallpaperRenderer, message => _log.Write("Wallpaper", message));
+        _wallpaperRenderer.ConfigureCacheLimit(Settings.LowPerformanceMode ? 128L * 1024 * 1024 : 512L * 1024 * 1024,
+            trimImmediately: _apply.TryRefreshCacheProtection());
         _explorerRecovery = new ExplorerRecoveryCoordinator(
-            async token =>
-            {
-                if (!token.IsCancellationRequested) await MatchAndApplyAsync().ConfigureAwait(false);
-            },
+            // Queue the normal discovery path so recovery uses the current
+            // topology and observes pause/validation mode. This does not await
+            // a wallpaper transaction while Explorer recovery is in progress.
+            token => token.IsCancellationRequested ? Task.CompletedTask : DetectAsync(),
             message => _log.Warn("ExplorerRecovery", message));
         _apply.ExplorerUnavailable += message => _explorerRecovery.NotifyUnavailable(message);
         _apply.TransactionChanged += (_, status) =>
@@ -185,7 +180,8 @@ public sealed class AppRuntime : IDisposable
     public void SetLowPerformanceMode(bool enabled)
     {
         Settings.LowPerformanceMode = enabled;
-        _wallpaperRenderer.ConfigureCacheLimit(enabled ? 128L * 1024 * 1024 : 512L * 1024 * 1024);
+        _wallpaperRenderer.ConfigureCacheLimit(enabled ? 128L * 1024 * 1024 : 512L * 1024 * 1024,
+            trimImmediately: _apply.TryRefreshCacheProtection());
         TrySaveSettings();
         RaiseChanged();
     }
@@ -216,7 +212,7 @@ public sealed class AppRuntime : IDisposable
     {
         Monitors = _discovery.Discover();
         WallpaperProfile? preferredProfile = null;
-        if (LastMatch is { Profile: not null, CanAutoApply: true } previous
+        if (LastMatch is { Profile: not null, CanAutoApply: true, IsGeneric: false } previous
             && previous.Status is MatchStatus.Exact or MatchStatus.Compatible)
             preferredProfile = previous.Profile;
         await MatchAndApplyAsync(manual: true, preferredProfile).ConfigureAwait(false);
@@ -263,6 +259,8 @@ public sealed class AppRuntime : IDisposable
         var match = preferredProfile is null
             ? _matcher.Match(Monitors, Profiles.Profiles)
             : _matcher.Match(Monitors, new[] { preferredProfile });
+        if (preferredProfile is not null && (!match.CanAutoApply || !WallpaperProfileApplyPolicy.IsComplete(match.Profile)))
+            match = _matcher.Match(Monitors, Profiles.Profiles);
         _log.Write("Match", match.Message, match.Profile?.Name, Monitors.Count, match.Confidence);
         await ApplyMatchedWallpaperAsync(match, manual).ConfigureAwait(false);
     }
@@ -303,7 +301,7 @@ public sealed class AppRuntime : IDisposable
             var result = await RunOnDispatcherAsync(() => _apply.ApplyAsync(
                 match, Library.Assets, Paths, generation: _coordinator.Generation, manual: manual)).ConfigureAwait(false);
             LastMessage = result.Message;
-            StatusText = result.Success ? "运行中" : "应用未完成";
+            StatusText = result.Success ? match.IsGeneric ? "通用匹配" : "运行中" : "应用未完成";
             if (result.Success) RecordSuccessfulWallpaperMatch(match);
             RaiseChanged();
             return result.Success;
@@ -334,7 +332,7 @@ public sealed class AppRuntime : IDisposable
                 throw new InvalidOperationException("显示器连接或身份已改变，请重新识别后保存。");
             return new ManualWallpaperAssignment(candidates[0], assignment.Role, assignment.WallpaperPath);
         }).ToArray();
-        var profile = Profiles.Profiles.FirstOrDefault(x => string.Equals(x.Id, Settings.EditingProfileId, StringComparison.OrdinalIgnoreCase))
+        var profile = Profiles.Profiles.FirstOrDefault(x => !x.IsGeneric && string.Equals(x.Id, Settings.EditingProfileId, StringComparison.OrdinalIgnoreCase))
             ?? new WallpaperProfile { Name = "手动确认配置" };
         ManualWallpaperBindingService.Apply(profile, resolved);
         if (!Profiles.Profiles.Contains(profile)) Profiles.Profiles.Add(profile);
@@ -363,13 +361,14 @@ public sealed class AppRuntime : IDisposable
         }).ToArray();
     }
 
-    public void ImportWallpaper(string path)
+    public WallpaperAsset ImportWallpaper(string path)
     {
         var asset = _library.Import(path);
         Library = _library.Load();
         LastMessage = $"已导入壁纸：{asset.DisplayName}";
         _log.Info("Library", LastMessage);
         RaiseChanged();
+        return asset;
     }
 
     public WallpaperLibraryRefreshResult RefreshLibrary()
@@ -462,10 +461,10 @@ public sealed class AppRuntime : IDisposable
         return profile;
     }
 
-    public WallpaperProfile CreateBlankWallpaperProfile(string? name)
+    public WallpaperProfile CreateBlankWallpaperProfile(string? name, WallpaperProfileMatchMode matchMode = WallpaperProfileMatchMode.Specific)
     {
         var priority = Profiles.Profiles.Count == 0 ? 100 : Profiles.Profiles.Max(x => x.Priority) + 10;
-        var profile = WallpaperProfileEditingService.CreateBlank(name, priority);
+        var profile = WallpaperProfileEditingService.CreateBlank(name, priority, matchMode);
         Profiles.Profiles.Add(profile);
         Settings.EditingProfileId = profile.Id;
         Store.Save("profiles.json", Profiles);
@@ -488,6 +487,8 @@ public sealed class AppRuntime : IDisposable
     public void UpdateWallpaperProfile(string profileId, WallpaperProfileEditDraft draft)
     {
         var profile = FindWallpaperProfile(profileId) ?? throw new InvalidOperationException("找不到要编辑的壁纸组合。");
+        if (profile.MatchMode != draft.MatchMode)
+            throw new InvalidOperationException("组合类型不能直接转换，请新建相应类型的组合。");
         foreach (var role in draft.Roles)
         {
             if (string.IsNullOrWhiteSpace(role.WallpaperAssetId))
@@ -515,6 +516,8 @@ public sealed class AppRuntime : IDisposable
             : $"已更新壁纸组合“{profile.Name}”：{profile.Roles.Count} 个逻辑角色";
         _log.Info("Config", LastMessage);
         RaiseChanged();
+        if (Settings.AutoMatchEnabled && !_sessionAutoMatchSuppressed)
+            _coordinator.Signal(manual: true);
     }
 
     public async Task<bool> ApplyWallpaperProfileAsync(string profileId)
@@ -783,7 +786,7 @@ public sealed class AppRuntime : IDisposable
         {
             if (!match.TryGetMonitor(role, out var monitor)) continue;
             role.LastSuccessfulMatchAt = DateTime.UtcNow;
-            role.LastKnownMonitorDevicePath = monitor.MonitorDevicePath;
+            if (!match.IsGeneric) role.LastKnownMonitorDevicePath = monitor.MonitorDevicePath;
         }
         Store.Save("profiles.json", Profiles);
         TrySaveSettings();

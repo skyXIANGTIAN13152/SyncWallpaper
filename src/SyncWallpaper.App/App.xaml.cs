@@ -19,7 +19,11 @@ public partial class App : System.Windows.Application
         base.OnStartup(e);
         var background = e.Args.Any(a => a.Equals("--background", StringComparison.OrdinalIgnoreCase));
         _validationMode = e.Args.Any(a => a.Equals("--validation", StringComparison.OrdinalIgnoreCase));
-        _singleInstance = new SingleInstanceService();
+        // UI validation uses isolated data and must not activate the user's
+        // running production instance instead of the build being checked.
+        _singleInstance = _validationMode
+            ? new SingleInstanceService("Local\\SyncWallpaper.Validation.SingleInstance", "Local\\SyncWallpaper.Validation.Activate")
+            : new SingleInstanceService();
         if (!_singleInstance.TryAcquire())
         {
             _singleInstance.SignalExistingInstance();
@@ -46,7 +50,14 @@ public partial class App : System.Windows.Application
 
     private ContextMenuStrip BuildTrayMenu()
     {
-        var menu = new ContextMenuStrip();
+        var menu = new ContextMenuStrip
+        {
+            BackColor = System.Drawing.Color.FromArgb(13, 28, 25),
+            ForeColor = System.Drawing.Color.FromArgb(243, 235, 220),
+            Font = new System.Drawing.Font("Microsoft YaHei UI", 9f),
+            ShowImageMargin = false,
+            Renderer = new ToolStripProfessionalRenderer(new SecretGroveMenuColors()) { RoundedEdges = false }
+        };
         menu.Items.Add("打开屏序", null, (_, _) => ShowMainWindow());
         menu.Items.Add("重新检测显示器", null, async (_, _) => await (_runtime?.DetectAsync() ?? Task.CompletedTask));
         menu.Items.Add("重新应用已匹配壁纸", null, async (_, _) => await (_runtime?.ReapplyAsync() ?? Task.CompletedTask));
@@ -76,6 +87,33 @@ public partial class App : System.Windows.Application
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => ShutdownFromTray());
         return menu;
+    }
+
+    private sealed class SecretGroveMenuColors : ProfessionalColorTable
+    {
+        private static readonly System.Drawing.Color Ink = System.Drawing.Color.FromArgb(13, 28, 25);
+        private static readonly System.Drawing.Color Leaf = System.Drawing.Color.FromArgb(32, 53, 45);
+        private static readonly System.Drawing.Color Gold = System.Drawing.Color.FromArgb(210, 180, 122);
+        private static readonly System.Drawing.Color Border = System.Drawing.Color.FromArgb(77, 82, 58);
+
+        public SecretGroveMenuColors() => UseSystemColors = false;
+        public override System.Drawing.Color ToolStripDropDownBackground => Ink;
+        public override System.Drawing.Color ImageMarginGradientBegin => Ink;
+        public override System.Drawing.Color ImageMarginGradientMiddle => Ink;
+        public override System.Drawing.Color ImageMarginGradientEnd => Ink;
+        public override System.Drawing.Color MenuBorder => Border;
+        public override System.Drawing.Color MenuItemBorder => Gold;
+        public override System.Drawing.Color MenuItemSelected => Leaf;
+        public override System.Drawing.Color MenuItemSelectedGradientBegin => Leaf;
+        public override System.Drawing.Color MenuItemSelectedGradientEnd => Leaf;
+        public override System.Drawing.Color MenuItemPressedGradientBegin => Leaf;
+        public override System.Drawing.Color MenuItemPressedGradientMiddle => Leaf;
+        public override System.Drawing.Color MenuItemPressedGradientEnd => Leaf;
+        public override System.Drawing.Color SeparatorDark => Border;
+        public override System.Drawing.Color SeparatorLight => Ink;
+        public override System.Drawing.Color CheckBackground => Leaf;
+        public override System.Drawing.Color CheckSelectedBackground => Leaf;
+        public override System.Drawing.Color CheckPressedBackground => Leaf;
     }
 
     private void ShowMainWindow()

@@ -2,7 +2,9 @@ using System.Text.Json.Serialization;
 
 namespace SyncWallpaper.Core;
 
-public enum MatchStatus { Exact, Compatible, Ambiguous, NoMatch }
+public enum MatchStatus { Exact, Compatible, Ambiguous, NoMatch, Generic }
+public enum WallpaperProfileMatchMode { Specific, Generic }
+public enum GenericMonitorOrientation { Landscape, Portrait }
 public enum WallpaperFitMode { Fill, Fit, Stretch, Center, Tile, Span }
 public enum DisplayCombinationKind { LaptopOnly, ThreeMonitorSetup, Custom }
 public enum MonitorIdentitySource { Unknown, EdidSerial, ContainerId, MonitorDevicePath, InstanceName, HardwareTopology, Geometry, Ambiguous }
@@ -71,10 +73,12 @@ public sealed class MonitorIdentity
 
 public sealed class MonitorRoleBinding
 {
-    public int SchemaVersion { get; set; } = 5;
+    public int SchemaVersion { get; set; } = 6;
     public string RoleId { get; set; } = Guid.NewGuid().ToString("N");
     public string Role { get; set; } = "Laptop";
     public string DisplayName { get; set; } = "笔记本本体";
+    public GenericMonitorOrientation GenericOrientation { get; set; }
+    public int GenericIndex { get; set; } = 1;
     public MonitorIdentity Fingerprint { get; set; } = new();
     public string WallpaperAssetId { get; set; } = string.Empty;
     public string WallpaperPath { get; set; } = string.Empty;
@@ -96,8 +100,10 @@ public sealed class MonitorRoleBinding
 public sealed class WallpaperProfile
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public int SchemaVersion { get; set; } = 5;
+    public int SchemaVersion { get; set; } = 6;
     public string Name { get; set; } = string.Empty;
+    public WallpaperProfileMatchMode MatchMode { get; set; } = WallpaperProfileMatchMode.Specific;
+    [JsonIgnore] public bool IsGeneric => MatchMode == WallpaperProfileMatchMode.Generic;
     public DisplayCombinationKind Combination { get; set; } = DisplayCombinationKind.Custom;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime ModifiedAt { get; set; } = DateTime.UtcNow;
@@ -162,7 +168,7 @@ public sealed class LibraryDocument
 
 public sealed class ProfilesDocument
 {
-    public int SchemaVersion { get; set; } = 5;
+    public int SchemaVersion { get; set; } = 6;
     public List<WallpaperProfile> Profiles { get; set; } = new();
 }
 
@@ -180,6 +186,10 @@ public sealed class MatchResult
 {
     public MatchStatus Status { get; init; }
     public WallpaperProfile? Profile { get; init; }
+    public bool IsGeneric => Profile?.IsGeneric == true;
+    public int UnassignedMonitorCount { get; init; }
+    /// <summary>All screens in the matched generic layout, including slots retaining their wallpaper.</summary>
+    [JsonIgnore] public IReadOnlyList<MonitorIdentity> GenericLayoutMonitors { get; init; } = Array.Empty<MonitorIdentity>();
     /// <summary>
     /// Runtime monitor assignments keyed by the binding's stable RoleId.
     /// Logical role names are not unique: a profile may legitimately contain
@@ -201,6 +211,15 @@ public sealed class MatchResult
         if (!string.IsNullOrWhiteSpace(binding.RoleId)
             && RoleMatches.TryGetValue(binding.RoleId, out monitor!))
             return true;
+
+        // Generic slots have always used RoleId. Falling back to a label
+        // could make an intentionally unassigned slot resolve to another
+        // slot whose identifier happens to equal that label.
+        if (IsGeneric)
+        {
+            monitor = null!;
+            return false;
+        }
 
         // Compatibility for MatchResult instances created before RoleId
         // became the runtime assignment key.

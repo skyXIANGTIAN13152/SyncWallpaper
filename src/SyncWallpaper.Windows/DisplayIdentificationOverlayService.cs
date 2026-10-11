@@ -51,8 +51,8 @@ public sealed class DisplayIdentificationOverlayService
                 WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false, Topmost = true,
                 WindowStartupLocation = WindowStartupLocation.Manual,
                 Left = 0, Top = 0, Width = Math.Max(1, bounds.Width / scale), Height = Math.Max(1, bounds.Height / scale),
-                AllowsTransparency = true, Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(170, 4, 15, 32)),
-                Content = new TextBlock { Text = details, Foreground = System.Windows.Media.Brushes.White, FontSize = Math.Max(42, Math.Min(bounds.Width, bounds.Height) / 10 / scale),
+                AllowsTransparency = true, Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(205, 13, 28, 25)),
+                Content = new TextBlock { Text = details, Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(243, 235, 220)), FontSize = Math.Max(42, Math.Min(bounds.Width, bounds.Height) / 10 / scale),
                     FontWeight = FontWeights.Bold, TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = System.Windows.HorizontalAlignment.Center }
             };
             window.MouseDown += (_, _) => FinishIfReady();
@@ -140,13 +140,12 @@ public sealed class DisplayRoleAssignmentService
         IReadOnlyList<ManualDisplayAssignment>? initialAssignments)
     {
         var tcs = new TaskCompletionSource<IReadOnlyList<ManualDisplayAssignment>>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var window = new Window { Title = "屏序 · 确认逻辑角色与壁纸", Width = 1020, Height = 600, MinWidth = 820, MinHeight = 460, WindowStartupLocation = WindowStartupLocation.CenterScreen,
-            Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(7, 13, 27)), Foreground = WpfBrushes.White, Topmost = true };
-        window.SetResourceReference(Window.BackgroundProperty, "WindowSurface");
+        var window = new Window { Title = "屏序 · 确认逻辑角色与壁纸", Width = 1080, Height = 640, MinWidth = 900, MinHeight = 500, WindowStartupLocation = WindowStartupLocation.CenterScreen,
+            WindowStyle = WindowStyle.None, AllowsTransparency = true, Background = WpfBrushes.Transparent, Foreground = WpfBrushes.White, Topmost = true };
         window.SetResourceReference(Window.ForegroundProperty, "TextPrimary");
-        var root = new DockPanel { Margin = new Thickness(20), LastChildFill = false };
-        var heading = new TextBlock { Text = "确认显示器角色与壁纸", FontSize = 20, Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(54, 232, 255)), Margin = new Thickness(0, 0, 0, 14) };
-        heading.SetResourceReference(TextBlock.ForegroundProperty, "Cyan");
+        var root = new DockPanel { Margin = new Thickness(26), LastChildFill = true };
+        var heading = new TextBlock { Text = "核对 A / B / C 的显示器身份，再选择角色与壁纸。", FontSize = 14, Margin = new Thickness(0, 0, 0, 22) };
+        heading.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondary");
         DockPanel.SetDock(heading, Dock.Top); root.Children.Add(heading);
         var rows = new List<(DisplayIdentificationMark Mark, WpfComboBox Role, WpfTextBox Path)>();
         var grid = new Grid(); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -176,7 +175,7 @@ public sealed class DisplayRoleAssignmentService
             var browse = new System.Windows.Controls.Button { Content = "选择…", Margin = new Thickness(4), Padding = new Thickness(10, 5, 10, 5) };
             browse.Click += (_, _) => { var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "图片|*.jpg;*.jpeg;*.png;*.bmp" }; if (dialog.ShowDialog() == true) path.Text = dialog.FileName; };
             var pathPanel = new DockPanel(); DockPanel.SetDock(browse, Dock.Right); pathPanel.Children.Add(browse); pathPanel.Children.Add(path);
-            AddCell(grid, i + 1, 0, new TextBlock { Text = mark.Label, FontSize = 20, Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(54, 232, 255)), Margin = new Thickness(4) });
+            AddCell(grid, i + 1, 0, new TextBlock { Text = mark.Label, FontSize = 20, Margin = new Thickness(4) });
             AddCell(grid, i + 1, 1, new TextBlock { Text = string.IsNullOrWhiteSpace(mark.StableId) ? "（无稳定 ID）" : MonitorIdentitySanitizer.Redact(mark.StableId), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(4), Foreground = WpfBrushes.LightGray, ToolTip = "稳定身份已脱敏" });
             AddCell(grid, i + 1, 2, role); AddCell(grid, i + 1, 3, pathPanel); rows.Add((mark, role, path));
         }
@@ -186,7 +185,25 @@ public sealed class DisplayRoleAssignmentService
         var save = new System.Windows.Controls.Button { Content = "保存绑定", Padding = new Thickness(18, 8, 18, 8), Margin = new Thickness(6) };
         var cancel = new System.Windows.Controls.Button { Content = "取消", Padding = new Thickness(18, 8, 18, 8), Margin = new Thickness(6) };
         save.SetResourceReference(FrameworkElement.StyleProperty, "PrimaryButton");
-        buttons.Children.Add(cancel); buttons.Children.Add(save); DockPanel.SetDock(buttons, Dock.Bottom); root.Children.Add(buttons); window.Content = root;
+        buttons.Children.Add(cancel); buttons.Children.Add(save); DockPanel.SetDock(buttons, Dock.Bottom); root.Children.Add(buttons);
+        root.Children.Remove(content); root.Children.Add(content);
+        var shell = new Grid();
+        var atmosphere = new ContentControl { Content = string.Empty, IsHitTestVisible = false,
+            HorizontalContentAlignment = System.Windows.HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
+        atmosphere.SetResourceReference(ContentControl.ContentTemplateProperty, "AtmosphereTemplate");
+        shell.Children.Add(atmosphere);
+        var layout = new Grid(); layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(58) }); layout.RowDefinitions.Add(new RowDefinition());
+        var titleBar = new Border { Padding = new Thickness(24, 0, 14, 0), CornerRadius = new CornerRadius(14, 14, 0, 0) };
+        titleBar.SetResourceReference(Border.BackgroundProperty, "TranslucentHeader");
+        var titleContent = new DockPanel();
+        var close = new System.Windows.Controls.Button { Content = "×", Width = 36, Height = 32, Padding = new Thickness(0), FontSize = 20 };
+        close.Click += (_, _) => window.Close(); DockPanel.SetDock(close, Dock.Right); titleContent.Children.Add(close);
+        titleContent.Children.Add(new TextBlock { Text = "确认显示器角色与壁纸", FontSize = 19, VerticalAlignment = VerticalAlignment.Center });
+        titleBar.Child = titleContent; titleBar.MouseLeftButtonDown += (_, e) => { if (e.ButtonState == System.Windows.Input.MouseButtonState.Pressed) window.DragMove(); };
+        layout.Children.Add(titleBar); Grid.SetRow(root, 1); layout.Children.Add(root); shell.Children.Add(layout);
+        var frame = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(14), Child = shell };
+        frame.SetResourceReference(Border.BackgroundProperty, "WindowSurface"); frame.SetResourceReference(Border.BorderBrushProperty, "GlassBorder"); window.Content = frame;
+        window.KeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Escape) { window.Close(); e.Handled = true; } };
         var finished = false;
         void Finish(IReadOnlyList<ManualDisplayAssignment> value) { if (finished) return; finished = true; tcs.TrySetResult(value); if (window.IsVisible) window.Close(); }
         save.Click += (_, _) => Finish(rows.Select(x => new ManualDisplayAssignment(x.Mark.StableId, x.Mark.MonitorDevicePath, x.Role.SelectedItem?.ToString() ?? "Custom", x.Path.Text.Trim())).ToArray());

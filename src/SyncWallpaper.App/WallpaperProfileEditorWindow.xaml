@@ -1,103 +1,255 @@
 <Window x:Class="SyncWallpaper.App.WallpaperProfileEditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="编辑壁纸组合" Width="1120" Height="720" MinWidth="900" MinHeight="560"
+        xmlns:local="clr-namespace:SyncWallpaper.App"
+        Title="编辑壁纸组合" Width="1180" Height="820" MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterOwner" WindowStyle="None" AllowsTransparency="True"
-        Background="Transparent" Foreground="{DynamicResource TextPrimary}" ResizeMode="CanResizeWithGrip">
+        Background="Transparent" Foreground="{DynamicResource TextPrimary}"
+        ResizeMode="CanResizeWithGrip" PreviewKeyDown="Window_PreviewKeyDown">
+    <Window.Resources>
+        <Style x:Key="EditorImageButton" TargetType="Button">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Background" Value="{DynamicResource InputBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ImageFrame" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5" ClipToBounds="True">
+                            <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ImageFrame" Property="BorderBrush" Value="{DynamicResource Cyan}"/></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ImageFrame" Property="BorderBrush" Value="{DynamicResource Cyan}"/><Setter TargetName="ImageFrame" Property="BorderThickness" Value="2"/></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="ImageFrame" Property="Opacity" Value="0.45"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="EditorDivider" TargetType="Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource Border}"/>
+            <Setter Property="BorderThickness" Value="0,1,0,0"/>
+            <Setter Property="Margin" Value="0,18,0,18"/>
+        </Style>
+        <Style x:Key="EditorHelpText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="LineHeight" Value="21"/>
+        </Style>
+    </Window.Resources>
     <Border Background="{DynamicResource WindowSurface}" BorderBrush="{DynamicResource GlassBorder}" BorderThickness="1" CornerRadius="16">
         <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="58"/>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="70"/>
-            </Grid.RowDefinitions>
-
-            <Border Grid.Row="0" Background="{DynamicResource HeaderBackground}" CornerRadius="16,16,0,0" MouseLeftButtonDown="Header_MouseLeftButtonDown">
-                <DockPanel Margin="22,0,12,0">
-                    <Button Content="×" DockPanel.Dock="Right" Width="42" Height="34" Padding="0" FontSize="20" Click="Cancel_Click"/>
-                    <TextBlock Text="编辑壁纸组合" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                </DockPanel>
-            </Border>
-
-            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="26,20">
-                <StackPanel>
-                    <TextBlock Text="组合信息" FontSize="17" FontWeight="SemiBold"/>
-                    <Grid Margin="0,12,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="100"/>
-                            <ColumnDefinition Width="320"/>
-                            <ColumnDefinition Width="20"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="组合名称" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}"/>
-                        <TextBox x:Name="NameText" Grid.Column="1" Height="38" VerticalContentAlignment="Center"/>
-                        <WrapPanel Grid.Column="3" VerticalAlignment="Center">
-                            <CheckBox x:Name="EnabledCheck" Content="参与匹配" Foreground="{DynamicResource TextPrimary}" Margin="0,0,22,0"/>
-                            <TextBlock Text="配置完整后，匹配成功即自动应用" Foreground="{DynamicResource Cyan}" Margin="0,0,22,0" VerticalAlignment="Center"/>
-                            <CheckBox x:Name="CompatibleCheck" Content="显示兼容候选" Foreground="{DynamicResource TextPrimary}"/>
-                        </WrapPanel>
-                    </Grid>
-
-                    <Border BorderBrush="{DynamicResource Border}" BorderThickness="0,1,0,0" Margin="0,20,0,18"/>
-                    <DockPanel>
-                        <StackPanel DockPanel.Dock="Left">
-                            <TextBlock Text="显示器角色与壁纸" FontSize="17" FontWeight="SemiBold"/>
-                            <TextBlock Text="同一显示器只能分配一次。空白组合可以不添加角色，但不会参与自动匹配。" Foreground="{DynamicResource TextSecondary}" Margin="0,5,0,0"/>
+            <local:MysteryBackdrop IsHitTestVisible="False"/>
+            <Grid x:Name="EditorContent">
+                <Grid.RowDefinitions><RowDefinition Height="66"/><RowDefinition Height="*"/><RowDefinition Height="78"/></Grid.RowDefinitions>
+                <Border Background="{DynamicResource TranslucentHeader}" BorderBrush="{DynamicResource Border}" BorderThickness="0,0,0,1" CornerRadius="16,16,0,0" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                    <Grid Margin="23,0,14,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <local:BrandGlyph Width="35" Height="35" Margin="0,0,12,0" IsHitTestVisible="False"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="屏序" FontSize="19" FontWeight="SemiBold"/>
+                            <TextBlock Text="SyncWallpaper" FontFamily="Bahnschrift" FontSize="11" Foreground="{DynamicResource TextSecondary}" Margin="0,2,0,0"/>
                         </StackPanel>
-                        <WrapPanel DockPanel.Dock="Right" HorizontalAlignment="Right">
-                            <Button Content="按当前显示器添加角色" Click="AddCurrentMonitors_Click"/>
-                            <Button Content="添加一个角色" Click="AddRole_Click"/>
-                        </WrapPanel>
-                    </DockPanel>
-
-                    <Grid Margin="0,18,0,7">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="145"/>
-                            <ColumnDefinition Width="2*"/>
-                            <ColumnDefinition Width="2*"/>
-                            <ColumnDefinition Width="125"/>
-                            <ColumnDefinition Width="78"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="逻辑角色" Foreground="{DynamicResource TextSecondary}"/>
-                        <TextBlock Grid.Column="1" Text="显示器身份" Foreground="{DynamicResource TextSecondary}" Margin="8,0,0,0"/>
-                        <TextBlock Grid.Column="2" Text="壁纸" Foreground="{DynamicResource TextSecondary}" Margin="8,0,0,0"/>
-                        <TextBlock Grid.Column="3" Text="填充方式" Foreground="{DynamicResource TextSecondary}" Margin="8,0,0,0"/>
+                        <Button Grid.Column="2" Content="×" Width="38" Height="34" Padding="0" Margin="0" FontSize="22" Click="Cancel_Click" ToolTip="关闭编辑器" AutomationProperties.Name="关闭编辑器"/>
                     </Grid>
-                    <ItemsControl x:Name="RoleItems">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Background="{DynamicResource GlassCardBackground}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="10" Padding="10" Margin="0,0,0,8">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="135"/>
-                                            <ColumnDefinition Width="2*"/>
-                                            <ColumnDefinition Width="2*"/>
-                                            <ColumnDefinition Width="115"/>
-                                            <ColumnDefinition Width="68"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox Text="{Binding Role, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" MinHeight="38" VerticalContentAlignment="Center"/>
-                                        <ComboBox Grid.Column="1" ItemsSource="{Binding MonitorChoices}" DisplayMemberPath="Label" SelectedValuePath="Key" SelectedValue="{Binding SelectedMonitorKey, Mode=TwoWay}" Margin="8,0,0,0"/>
-                                        <ComboBox Grid.Column="2" ItemsSource="{Binding WallpaperChoices}" DisplayMemberPath="Label" SelectedValuePath="Id" SelectedValue="{Binding SelectedWallpaperId, Mode=TwoWay}" Margin="8,0,0,0"/>
-                                        <ComboBox Grid.Column="3" ItemsSource="{Binding FitChoices}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding FitMode, Mode=TwoWay}" Margin="8,0,0,0"/>
-                                        <Button Grid.Column="4" Content="移除" Tag="{Binding}" Click="RemoveRole_Click" Padding="9,7" Margin="8,0,0,0" Style="{StaticResource DangerButton}"/>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <TextBlock x:Name="EmptyHint" Text="这是空白组合。点击上方按钮添加当前显示器，或保持空白后稍后再编辑。" Foreground="{DynamicResource TextSecondary}" Margin="0,10,0,0"/>
-                </StackPanel>
-            </ScrollViewer>
+                </Border>
 
-            <Border Grid.Row="2" BorderBrush="{DynamicResource Border}" BorderThickness="0,1,0,0" Padding="24,14">
-                <DockPanel>
-                    <TextBlock x:Name="StatusText" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                    <WrapPanel DockPanel.Dock="Right" HorizontalAlignment="Right">
-                        <Button Content="取消" Click="Cancel_Click"/>
-                        <Button Content="保存修改" Click="Save_Click" Style="{StaticResource PrimaryButton}"/>
-                    </WrapPanel>
-                </DockPanel>
-            </Border>
+                <Grid Grid.Row="1" Margin="30,24,30,20">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <Grid Margin="0,0,0,22">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock x:Name="EditorTitle" Text="编辑特定组合" FontSize="27" FontWeight="Medium"/>
+                            <TextBlock x:Name="EditorDescription" Text="为已识别的显示器保存对应壁纸。" Style="{StaticResource EditorHelpText}" Margin="0,8,14,0"/>
+                        </StackPanel>
+                        <Border Grid.Column="1" VerticalAlignment="Top" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="4" Padding="10,5" Margin="10,3,0,0">
+                            <TextBlock x:Name="ProfileKindText" Text="特定组合" Foreground="{DynamicResource Cyan}" FontSize="12"/>
+                        </Border>
+                    </Grid>
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="24"/><ColumnDefinition Width="290"/></Grid.ColumnDefinitions>
+                        <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                            <StackPanel Margin="0,0,6,0">
+                                <TextBlock Text="组合名称" Style="{StaticResource EditorHelpText}" Margin="0,0,0,8"/>
+                                <TextBox x:Name="NameText" Height="46" FontSize="17" VerticalContentAlignment="Center" AutomationProperties.Name="组合名称"/>
+                            </StackPanel>
+                            <Grid Grid.Row="1" Margin="0,20,6,14">
+                                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                <TextBlock x:Name="RolesHeading" Text="屏幕与壁纸" FontSize="16" FontWeight="Medium" VerticalAlignment="Center"/>
+                                <WrapPanel x:Name="SpecificActions" Grid.Row="1" Margin="0,10,0,0">
+                                    <Button Content="按当前显示器添加" Click="AddCurrentMonitors_Click" FontSize="12" Padding="11,8" Margin="0,0,8,0"/>
+                                    <Button Content="＋ 添加角色" Click="AddRole_Click" FontSize="12" Padding="11,8" Margin="0"/>
+                                </WrapPanel>
+                                <WrapPanel x:Name="GenericActions" Visibility="Collapsed" Grid.Row="1" Margin="0,10,0,0">
+                                    <Button x:Name="AddLandscapeButton" Content="＋ 添加横屏" Click="AddLandscape_Click" FontSize="12" Padding="11,8" Margin="0,0,8,0"/>
+                                    <Button x:Name="AddPortraitButton" Content="＋ 添加竖屏" Click="AddPortrait_Click" FontSize="12" Padding="11,8" Margin="0"/>
+                                </WrapPanel>
+                            </Grid>
+                            <ScrollViewer x:Name="SlotsScrollViewer" Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0" SizeChanged="SlotsScrollViewer_SizeChanged">
+                                <StackPanel>
+                                    <ItemsControl x:Name="RoleItems">
+                                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemContainerStyle>
+                                            <Style TargetType="ContentPresenter"><Setter Property="Width" Value="{Binding SlotCardWidth, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"/></Style>
+                                        </ItemsControl.ItemContainerStyle>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="{DynamicResource TranslucentPanel}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="8" Padding="13" Margin="0,0,10,12">
+                                                    <StackPanel>
+                                                        <Grid Margin="0,0,0,11">
+                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                            <TextBlock Text="{Binding Role}" Visibility="{Binding GenericVisibility}" FontSize="14" FontWeight="Medium" VerticalAlignment="Center"/>
+                                                            <TextBox Text="{Binding Role, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Visibility="{Binding SpecificVisibility}" MinHeight="34" VerticalContentAlignment="Center" Margin="0,0,8,0" ToolTip="逻辑角色名称" AutomationProperties.Name="逻辑角色名称"/>
+                                                            <Button Grid.Column="1" Content="×" Tag="{Binding}" Click="RemoveRole_Click" Width="27" Height="27" Padding="0" Margin="0" FontSize="19" Foreground="{DynamicResource TextSecondary}" ToolTip="移除此位置" AutomationProperties.Name="移除此位置"/>
+                                                        </Grid>
+                                                        <ComboBox Visibility="{Binding SpecificVisibility}" ItemsSource="{Binding MonitorChoices}" DisplayMemberPath="Label" SelectedValuePath="Key"
+                                                                  SelectedValue="{Binding SelectedMonitorKey, Mode=TwoWay}" Margin="0,0,0,10" MinHeight="35" FontSize="11" ToolTip="选择显示器身份"
+                                                                  PreviewMouseWheel="NestedControl_PreviewMouseWheel" AutomationProperties.Name="选择显示器身份"/>
+                                                        <Button Tag="{Binding}" Click="OpenWallpaperPicker_Click" Style="{StaticResource EditorImageButton}" Height="128" ToolTip="{Binding WallpaperHint}" AutomationProperties.Name="选择或更换壁纸">
+                                                            <Grid ClipToBounds="True">
+                                                                <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                                <TextBlock Text="{Binding PreviewPlaceholder}" Visibility="{Binding PlaceholderVisibility}" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="13"/>
+                                                                <Border Background="#CA071A12" VerticalAlignment="Bottom" Padding="9,6">
+                                                                    <TextBlock Text="{Binding WallpaperCaption}" Foreground="#F3EBDC" FontSize="11" TextTrimming="CharacterEllipsis" TextAlignment="Center"/>
+                                                                </Border>
+                                                            </Grid>
+                                                        </Button>
+                                                        <Grid Margin="0,10,0,0">
+                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                            <TextBlock Text="显示方式" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}" FontSize="11" Margin="0,0,7,0"/>
+                                                            <ComboBox Grid.Column="1" ItemsSource="{Binding FitChoices}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding FitMode, Mode=TwoWay}" MinHeight="33" FontSize="11" PreviewMouseWheel="NestedControl_PreviewMouseWheel" AutomationProperties.Name="壁纸显示方式"/>
+                                                            <Button Grid.Column="2" Content="浏览…" Tag="{Binding}" Click="BrowseWallpaper_Click" Padding="8,7" Margin="7,0,0,0" FontSize="11" ToolTip="导入图片并用于此位置"/>
+                                                        </Grid>
+                                                        <TextBlock Text="{Binding WallpaperStatus}" Foreground="{DynamicResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,0"/>
+                                                        <TextBlock Visibility="{Binding GenericVisibility}" Text="{Binding CurrentMonitorHint}" Foreground="{DynamicResource TextSecondary}" FontSize="10" TextWrapping="Wrap" Margin="0,6,0,0" Opacity="0.85"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Border x:Name="EmptyState" Background="{DynamicResource TranslucentPanel}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="8" Padding="30,36" Margin="0,0,10,0">
+                                        <StackPanel>
+                                            <TextBlock Text="从你的第一块屏幕开始" FontSize="17" TextAlignment="Center" Margin="0,0,0,12"/>
+                                            <TextBlock x:Name="EmptyHint" Text="添加当前显示器，或先保存空白组合，稍后继续配置。" Style="{StaticResource EditorHelpText}" TextAlignment="Center"/>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+
+                        <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
+                            <Border Background="{DynamicResource TranslucentPanel}" BorderBrush="{DynamicResource GlassBorder}" BorderThickness="1" CornerRadius="8" Padding="20">
+                                <StackPanel>
+                                    <TextBlock x:Name="RequirementTitle" Text="此组合的屏幕" FontSize="15" FontWeight="Medium"/>
+                                    <WrapPanel Margin="0,18,0,18" VerticalAlignment="Center">
+                                        <TextBlock x:Name="LandscapeCountText" Text="0" Foreground="{DynamicResource Cyan}" FontFamily="Bahnschrift" FontSize="34" VerticalAlignment="Center"/>
+                                        <TextBlock Text="横屏" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="＋" Foreground="{DynamicResource TextSecondary}" FontSize="18" Margin="12,0,12,0" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="PortraitCountText" Text="0" Foreground="{DynamicResource Cyan}" FontFamily="Bahnschrift" FontSize="34" VerticalAlignment="Center"/>
+                                        <TextBlock Text="竖屏" Foreground="{DynamicResource TextSecondary}" FontSize="12" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                    </WrapPanel>
+                                    <TextBlock x:Name="ApplyHint" Text="通过保存的显示器身份匹配，优先于通用组合。" Style="{StaticResource EditorHelpText}"/>
+                                    <TextBlock x:Name="GenericRequirementHint" Visibility="Collapsed" TextWrapping="Wrap" Foreground="{DynamicResource Cyan}" FontSize="11" LineHeight="19" Margin="0,12,0,0"/>
+                                    <Border Style="{StaticResource EditorDivider}"/>
+                                    <CheckBox x:Name="EnabledCheck" Content="参与匹配" Style="{StaticResource SwitchCheckBox}" Foreground="{DynamicResource TextPrimary}" ToolTip="勾选后才纳入组合匹配；关闭后手动应用也不会使用此组合。"/>
+                                    <Grid Margin="0,18,0,0">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="75"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="匹配优先级" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" FontSize="12"/>
+                                        <TextBox x:Name="PriorityText" Grid.Column="1" Height="35" VerticalContentAlignment="Center" TextAlignment="Center" AutomationProperties.Name="匹配优先级"/>
+                                    </Grid>
+                                    <TextBlock x:Name="PriorityHint" Text="身份依据相同时，数值越高越优先。" Style="{StaticResource EditorHelpText}" FontSize="11" Margin="0,9,0,0"/>
+                                    <Border Style="{StaticResource EditorDivider}"/>
+                                    <TextBlock x:Name="RulesText" Text="同一台显示器只能分配一次。每个角色选好壁纸后再应用。空白组合可先保存，稍后继续配置。" Style="{StaticResource EditorHelpText}"/>
+                                    <StackPanel x:Name="SpecificMatchingHelp" Margin="0,16,0,0">
+                                        <CheckBox x:Name="CompatibleCheck" Content="显示兼容候选" Foreground="{DynamicResource TextPrimary}" ToolTip="显示用于排查的兼容候选；候选不能直接应用壁纸。"/>
+                                        <TextBlock Text="兼容候选提供检查线索，不直接应用壁纸。" Style="{StaticResource EditorHelpText}" FontSize="11" Margin="0,10,0,0"/>
+                                        <Button x:Name="MatchingRulesButton" Content="查看完整匹配规则" Click="ToggleMatchingRules_Click" Foreground="{DynamicResource Cyan}" Padding="9,7" Margin="0,9,0,0" FontSize="11" HorizontalAlignment="Left"/>
+                                        <Border x:Name="MatchingRulesDetails" Visibility="Collapsed" BorderBrush="{DynamicResource Border}" BorderThickness="0,1,0,0" Padding="0,14,0,0" Margin="0,14,0,0">
+                                            <StackPanel>
+                                                <TextBlock Text="特定组合的匹配规则" FontSize="13" FontWeight="Medium" Margin="0,0,0,8"/>
+                                                <TextBlock Text="1. 参与匹配：当前屏幕数须与组合一致，每块屏幕只对应一个角色；配置完整且身份可靠时才应用。取消勾选后，手动应用也不会使用此组合。" Style="{StaticResource EditorHelpText}" FontSize="11"/>
+                                                <TextBlock x:Name="ReliableIdentityRuleText" Style="{StaticResource EditorHelpText}" FontSize="11" Margin="0,9,0,0"/>
+                                                <TextBlock Text="3. 兼容条件按顺序判断：有效设备关联 ID（Container ID）相同 → 型号、接口、几何全部一致 → 型号与几何一致 → 仅几何一致。" Style="{StaticResource EditorHelpText}" FontSize="11" Margin="0,9,0,0"/>
+                                                <TextBlock Text="4. 几何一致指当前分辨率宽度和高度、旋转方向、桌面 X 和 Y 坐标全部相同；刷新率、DPI 和 HDR 不参与此比较。" Style="{StaticResource EditorHelpText}" FontSize="11" Margin="0,9,0,0"/>
+                                                <TextBlock Text="5. 可靠序列号冲突时不能视为同一台显示器。0 分或缺少依据的候选可能用于诊断显示，但不能应用；存在多种映射时不猜测。" Style="{StaticResource EditorHelpText}" FontSize="11" Margin="0,9,0,0"/>
+                                                <TextBlock Text="6. 兼容候选不会自动应用，也不能通过“应用选中组合”直接应用。请先使用“识别 A/B/C”确认显示器。" Style="{StaticResource EditorHelpText}" FontSize="11" Margin="0,9,0,0"/>
+                                                <TextBlock Text="7. 没有安全且完整的特定匹配时，由横屏、竖屏数量均完全一致且已配置壁纸的通用组合接替；兼容候选开关不影响此规则。" Style="{StaticResource EditorHelpText}" FontSize="11" Margin="0,9,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </ScrollViewer>
+                    </Grid>
+                </Grid>
+                <Border Grid.Row="2" BorderBrush="{DynamicResource Border}" BorderThickness="0,1,0,0" Padding="30,17">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock x:Name="StatusText" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,22,0" FontSize="12"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button Content="取消" Click="Cancel_Click" Padding="20,10" Margin="0,0,10,0"/>
+                            <Button Content="保存组合" Click="Save_Click" Style="{StaticResource PrimaryButton}" Padding="22,10" Margin="0"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <Grid x:Name="WallpaperPicker" Visibility="Collapsed" Background="#C908150F" KeyboardNavigation.TabNavigation="Cycle">
+                <Button Background="Transparent" BorderThickness="0" Focusable="False" Click="CloseWallpaperPicker_Click" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="0" Padding="0" Style="{StaticResource EditorImageButton}"/>
+                <Border Background="{DynamicResource WindowSurface}" BorderBrush="{DynamicResource GlassBorder}" BorderThickness="1" CornerRadius="12" Margin="40" Padding="25" MaxWidth="900" MaxHeight="620">
+                    <Grid>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="选择壁纸" FontSize="23" FontWeight="Medium"/>
+                                <TextBlock x:Name="WallpaperPickerDescription" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="×" Click="CloseWallpaperPicker_Click" Width="34" Height="32" FontSize="21" Padding="0" Margin="10,0,0,0" VerticalAlignment="Top" AutomationProperties.Name="关闭壁纸选择"/>
+                        </Grid>
+                        <TextBox x:Name="WallpaperSearchText" Grid.Row="1" Margin="0,18,0,16" Height="38" VerticalContentAlignment="Center" TextChanged="WallpaperSearchText_TextChanged" ToolTip="按壁纸名称搜索" AutomationProperties.Name="搜索壁纸名称"/>
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel>
+                                <ItemsControl x:Name="WallpaperPickerItems">
+                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Tag="{Binding}" Click="ChooseWallpaper_Click" Width="240" Margin="0,0,14,16" Style="{StaticResource EditorImageButton}" ToolTip="{Binding Label}">
+                                                <StackPanel>
+                                                    <Grid Height="132" ClipToBounds="True">
+                                                        <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                        <TextBlock Text="{Binding Placeholder}" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12"/>
+                                                    </Grid>
+                                                    <StackPanel Margin="12,10,12,12">
+                                                        <TextBlock Text="{Binding Label}" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis" FontSize="13"/>
+                                                        <TextBlock Text="{Binding Details}" Foreground="{DynamicResource TextSecondary}" TextTrimming="CharacterEllipsis" FontSize="11" Margin="0,5,0,0"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock x:Name="WallpaperPickerEmpty" Text="档案库中还没有可选壁纸。点击“浏览并导入”添加图片。" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" TextAlignment="Center" Margin="20,40"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                        <Grid Grid.Row="3" Margin="0,18,0,0">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock x:Name="PickerStatusText" Grid.ColumnSpan="2" Visibility="Collapsed" TextWrapping="Wrap" Foreground="{DynamicResource Cyan}" FontSize="12" Margin="0,0,0,12"/>
+                            <Button x:Name="ClearWallpaperButton" Grid.Row="1" Content="保留当前壁纸" Click="ClearWallpaper_Click" HorizontalAlignment="Left" Margin="0" FontSize="12"/>
+                            <Button Grid.Row="1" Grid.Column="1" Content="浏览并导入…" Click="ImportPickerWallpaper_Click" Style="{StaticResource PrimaryButton}" Margin="0" FontSize="12"/>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
         </Grid>
     </Border>
 </Window>

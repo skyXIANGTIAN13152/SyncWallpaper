@@ -8,7 +8,7 @@ namespace SyncWallpaper.Core;
 /// </summary>
 public static class ProfileSchemaMigrator
 {
-    public const int CurrentSchemaVersion = 5;
+    public const int CurrentSchemaVersion = 6;
 
     public static ProfilesDocument Migrate(ProfilesDocument? document, Action<string>? log = null)
     {
@@ -18,6 +18,27 @@ public static class ProfileSchemaMigrator
         {
             if (profile is null) continue;
             profile.Roles ??= new List<MonitorRoleBinding>();
+            if (profile.SchemaVersion < 6) profile.MatchMode = WallpaperProfileMatchMode.Specific;
+            if (profile.IsGeneric)
+            {
+                // Positional slots never acquire a hardware identity, even
+                // when migrated repeatedly or copied from a specific profile.
+                profile.ExpectedMonitorCount = 0;
+                profile.Combination = DisplayCombinationKind.Custom;
+                if (WallpaperBindingSafety.EnsureUniqueRoleIds(profile.Roles.Where(role => role is not null)))
+                    log?.Invoke($"已修复重复或缺失的通用屏幕绑定编号：{profile.Name}");
+                foreach (var role in profile.Roles.Where(role => role is not null))
+                {
+                    role.Fingerprint = new MonitorIdentity();
+                    role.LastKnownMonitorDevicePath = string.Empty;
+                    role.AllowAutoRebind = false;
+                    role.SchemaVersion = Math.Max(role.SchemaVersion, CurrentSchemaVersion);
+                    role.Role = role.DisplayName = GenericProfileMatcher.GetSlotDisplayName(role.GenericOrientation, role.GenericIndex);
+                }
+                profile.AutoApply = WallpaperProfileApplyPolicy.IsComplete(profile);
+                profile.SchemaVersion = Math.Max(profile.SchemaVersion, CurrentSchemaVersion);
+                continue;
+            }
             if (profile.SchemaVersion < 2)
             {
                 profile.ExpectedMonitorCount = profile.ExpectedMonitorCount > 0 ? profile.ExpectedMonitorCount : profile.Roles.Count;

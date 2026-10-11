@@ -1,12 +1,18 @@
-# SyncWallpaper 1.1 wallpaper-only user guide
+# SyncWallpaper 1.2 wallpaper-only user guide
 
 1. Start `App\SyncWallpaper.App.exe`. Closing the window keeps the tray monitor running.
 2. Monitor Identification shows manufacturer, product, serial/device path, connector, resolution, refresh rate, DPI, HDR, orientation/flip and desktop coordinates. These values are read-only.
 3. If identical displays cannot be distinguished safely, show the temporary A/B/C overlays and bind each physical display to a logical role. The letters are not permanent IDs.
 4. Import JPG/JPEG/PNG/BMP files in Wallpaper Library. Refresh hides entries whose managed files were deleted.
-5. Save the current topology or create an empty profile and edit it later. Profiles can be named, renamed, deleted and manually applied.
-6. Assign a wallpaper and fit mode to every role. Green “Matched” means the current hardware topology is uniquely and completely configured; red “Not matched” means it is not safe to apply automatically.
-7. At sign-in and after HDMI/DP/USB-C, layout, resume or Explorer changes, SyncWallpaper automatically detects and applies the matching profile.
-8. Settings controls automatic matching, startup, low-resource mode and opt-in update checks.
+5. Save the current specific topology or create an empty profile and edit it later. Assign a monitor, wallpaper and fit mode to each specific role. Profiles can be renamed, deleted and manually applied; deleting a profile retains the original images.
+6. Choose “New generic profile” to prepare wallpapers for unfamiliar setups. Start with zero landscape and zero portrait screens, add slots, and select or import a wallpaper for Landscape 1, Landscape 2, Portrait 1 and so on. There is no fixed slot limit. You can save an empty profile and finish it later; empty profiles and profiles with no selected wallpaper do not apply.
+7. Each orientation is numbered independently from left to right, then top to bottom within a column, including internal laptop screens. The highest slot index in each orientation is its required screen count; an orientation with no slots requires zero screens. Removing a slot retains the other indexes. For example, keeping Landscape 1 and Landscape 3 still requires three landscape screens, and Landscape 2 keeps its current wallpaper. Adding another slot fills the lowest unused index. Slots set to “Keep current wallpaper” also retain their existing wallpaper.
+8. At sign-in and after display, layout, resume or Explorer changes, automatic matching prefers a complete, safely identified specific profile. Otherwise, a generic profile applies only when both its landscape and portrait counts exactly match the connected setup. A profile requiring two landscape screens therefore does not match one landscape plus one portrait screen. Priority selects only among enabled, fully count-matching generic profiles with configured wallpapers. If neither a safe, complete specific match nor an eligible generic match exists, every screen keeps its current wallpaper. Generic profiles do not support Span mode.
+9. “Apply selected profile” can manually apply a generic profile even when a specific match exists. Manual application still requires an exact match for each orientation's screen count; it cannot bypass the count check. The next automatic detection uses specific-profile priority again.
+10. Settings controls automatic matching, startup, low-resource mode and opt-in update checks. The tray menu provides detection, reapply, pause/resume and exit actions.
 
-The D: deployment stores data under `D:\屏序 SyncWallpaper\Config`, `Wallpapers`, `Cache`, `Thumbnails` and `Logs`. No configuration history or deleted-wallpaper backup is created.
+Specific profiles show “Matched” when identified. Generic profiles show “Generic match,” “Fallback ready,” “Not configured” or “Count mismatch” (“数量不符” in the Chinese app). Count mismatch means the connected landscape or portrait count differs from the profile's requirement, so the entire profile remains unapplied. The editor shows both the required and connected counts. After successful generic application, the tray shows gold display outlines and a warm-white diamond. Detection, paused and error states take precedence over this success state.
+
+The default Mystery theme uses deep forest green, antique gold and warm white; other themes remain available in Settings. Page titles and actions stay fixed while the content below scrolls independently. Library search, profile filtering and selected-profile actions also remain visible.
+
+Standard releases store data in `Config`, `Wallpapers`, `Cache`, `Thumbnails` and `Logs` under the writable extraction or installation root. If that location is not writable, the app falls back to `%LocalAppData%\SyncWallpaper`. Settings shows the actual data directory. No configuration history or deleted-wallpaper backup is created.

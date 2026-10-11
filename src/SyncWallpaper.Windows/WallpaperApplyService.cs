@@ -22,11 +22,39 @@ public sealed class WallpaperApplyService
     public event EventHandler<WallpaperTransactionStatus>? TransactionChanged;
     public event Action<string>? ExplorerUnavailable;
 
+    public bool TryRefreshCacheProtection()
+    {
+        try
+        {
+            using var desktop = _desktopFactory();
+            var complete = TryReadCurrentWallpapers(desktop, out var currentWallpapers);
+            _renderer.UpdateActiveCacheProtection(currentWallpapers, complete);
+            return complete;
+        }
+        catch (Exception)
+        {
+            _renderer.UpdateActiveCacheProtection(Array.Empty<string>(), completeSnapshot: false);
+            return false;
+        }
+    }
+
+    private static bool TryReadCurrentWallpapers(IWallpaperDesktop desktop, out HashSet<string> wallpapers)
+    {
+        wallpapers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (var path in desktop.GetMonitorDevicePaths())
+                wallpapers.Add(desktop.GetWallpaper(path) ?? string.Empty);
+            return true;
+        }
+        catch (Exception) { return false; }
+    }
+
     public async Task<ApplyResult> ApplyAsync(MatchResult match, IReadOnlyList<WallpaperAsset> assets, DataPaths paths, CancellationToken cancellationToken = default, long generation = 0, bool manual = false)
     {
         var started = DateTime.UtcNow;
         var state = new WallpaperTransactionStateMachine();
-        var expected = match.Profile?.Roles.Count ?? 0;
+        var expected = match.IsGeneric ? match.RoleMatches.Count : match.Profile?.Roles.Count ?? 0;
         PublishTransaction(generation, state.Current, started, null, 0, expected, 0, true, "准备壁纸事务");
         if (match.Status is MatchStatus.Ambiguous or MatchStatus.NoMatch || !match.CanAutoApply || match.Profile is null)
         {
@@ -39,6 +67,17 @@ public sealed class WallpaperApplyService
             state.Transition(WallpaperTransactionState.Failed);
             PublishTransaction(generation, state.Current, started, DateTime.UtcNow, 0, expected, 0, true, mappingError);
             return new ApplyResult(false, mappingError, 0);
+        }
+        expected = targets.Count;
+        var genericLayout = match.GenericLayoutMonitors.Select(monitor => monitor.Clone()).ToArray();
+        // Span changes the global Windows placement mode and could alter an
+        // unassigned screen. Generic rules only use per-screen rendering.
+        if (match.IsGeneric && targets.Any(target => target.Binding.FitMode == WallpaperFitMode.Span))
+        {
+            const string message = "通用组合不支持跨屏填充，请选择填充、适应或其他单屏方式。";
+            state.Transition(WallpaperTransactionState.Failed);
+            PublishTransaction(generation, state.Current, started, DateTime.UtcNow, 0, expected, 0, true, message);
+            return new ApplyResult(false, message, 0);
         }
         try { await _transactionGate.WaitAsync(cancellationToken).ConfigureAwait(false); }
         catch (OperationCanceledException)
@@ -57,6 +96,7 @@ public sealed class WallpaperApplyService
         var missing = 0;
         var rollbackSucceeded = true;
         var retries = 0;
+        var cacheProtected = false;
         try
         {
             state.Transition(WallpaperTransactionState.WaitingForStableTopology);
@@ -67,7 +107,21 @@ public sealed class WallpaperApplyService
                 if (string.IsNullOrWhiteSpace(path)) continue;
                 currentPaths.Add(path);
                 try { previous[path] = desktop.GetWallpaper(path) ?? string.Empty; }
-                catch (COMException) { previous[path] = string.Empty; }
+                catch (COMException ex)
+                {
+                    _log($"无法读取原壁纸：{path}；{ex.Message}");
+                    try { ExplorerUnavailable?.Invoke(ex.Message); } catch { }
+                }
+            }
+            _renderer.BeginCacheProtection(previous.Values, completeSnapshot: previous.Count == currentPaths.Count);
+            cacheProtected = true;
+
+            if (match.IsGeneric && !IsGenericLayoutCurrent(desktop, genericLayout))
+            {
+                const string message = "显示器组合已变化，通用组合整套不再匹配，保持当前壁纸。";
+                state.Transition(WallpaperTransactionState.Failed);
+                PublishTransaction(generation, state.Current, started, DateTime.UtcNow, 0, expected, retries, true, message);
+                return new ApplyResult(false, message, 0);
             }
 
             // Validate the entire one-to-one plan before the first write. A
@@ -79,6 +133,7 @@ public sealed class WallpaperApplyService
                 var asset = assets.FirstOrDefault(a => string.Equals(a.Id, role.WallpaperAssetId, StringComparison.OrdinalIgnoreCase));
                 var source = asset is null ? role.WallpaperPath : Resolve(asset, paths);
                 if (!currentPaths.Contains(target.Monitor.MonitorDevicePath)
+                    || !previous.ContainsKey(target.Monitor.MonitorDevicePath)
                     || string.IsNullOrWhiteSpace(source) || !File.Exists(source) || !IsSupportedImage(source))
                 {
                     missing++;
@@ -95,22 +150,46 @@ public sealed class WallpaperApplyService
                 return new ApplyResult(false, message, 0);
             }
 
-            state.Transition(WallpaperTransactionState.Applying);
-            PublishTransaction(generation, state.Current, started, null, applied, expected, retries, rollbackSucceeded, "开始应用壁纸");
+            // Decode and render every image before the first desktop mutation.
+            // An unreadable later source must not leave earlier screens changed.
+            var prepared = new List<(WallpaperTarget Target, string Rendered)>();
+            PublishTransaction(generation, state.Current, started, null, applied, expected, retries, rollbackSucceeded, "准备整套壁纸图片");
             foreach (var item in sources)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var role = item.Target.Binding;
                 var monitor = item.Target.Monitor;
-                _log($"开始渲染并应用：{role.DisplayName} → {monitor.DisplayLabel} {monitor.Width}x{monitor.Height}；绑定 {role.RoleId}；壁纸 {Path.GetFileName(item.Source)}");
+                _log($"开始渲染：{role.DisplayName} → {monitor.DisplayLabel} {monitor.Width}x{monitor.Height}；绑定 {role.RoleId}；壁纸 {Path.GetFileName(item.Source)}");
                 var rendered = _renderer.Render(item.Source, item.Hash, Math.Max(1, monitor.Width), Math.Max(1, monitor.Height), role.FitMode, role.BackgroundColor);
+                prepared.Add((item.Target, rendered));
                 _log($"渲染完成：{Path.GetFileName(rendered)}");
+            }
+            // Rendering can evict old cache entries when the cache is full.
+            // Refuse the whole transaction if any prepared image is unavailable.
+            if (prepared.Any(item => !File.Exists(item.Rendered)))
+                throw new IOException("整套壁纸缓存未能完整保留，请检查缓存空间后重试。");
+
+            state.Transition(WallpaperTransactionState.Applying);
+            PublishTransaction(generation, state.Current, started, null, applied, expected, retries, rollbackSucceeded, "开始应用壁纸");
+            foreach (var item in prepared)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (match.IsGeneric && !IsGenericLayoutCurrent(desktop, genericLayout))
+                {
+                    failed = true;
+                    _log("通用组合应用期间显示器布局变化，开始恢复原壁纸");
+                    break;
+                }
+                var role = item.Target.Binding;
+                var monitor = item.Target.Monitor;
+                var rendered = item.Rendered;
                 desired.Add(monitor.MonitorDevicePath, rendered);
                 if (role.FitMode == WallpaperFitMode.Span) desktop.SetSpanPosition();
                 if (string.Equals(desktop.GetWallpaper(monitor.MonitorDevicePath), rendered, StringComparison.OrdinalIgnoreCase)) { applied++; continue; }
                 var success = false;
                 for (var attempt = 0; attempt < 3 && !success; attempt++)
                 {
+                    if (match.IsGeneric && !IsGenericLayoutCurrent(desktop, genericLayout)) break;
                     if (attempt > 0)
                     {
                         retries++;
@@ -137,6 +216,7 @@ public sealed class WallpaperApplyService
             {
                 state.TryTransition(WallpaperTransactionState.Verifying);
                 applied = 0;
+                if (match.IsGeneric && !IsGenericLayoutCurrent(desktop, genericLayout)) failed = true;
                 foreach (var target in desired)
                 {
                     if (string.Equals(desktop.GetWallpaper(target.Key), target.Value, StringComparison.OrdinalIgnoreCase)) applied++;
@@ -148,17 +228,7 @@ public sealed class WallpaperApplyService
             {
                 state.TryTransition(WallpaperTransactionState.RollingBack);
                 PublishTransaction(generation, state.Current, started, null, applied, expected, retries, rollbackSucceeded, "应用失败，开始回滚");
-                foreach (var path in changed.AsEnumerable().Reverse())
-                {
-                    if (!previous.TryGetValue(path, out var old) || string.IsNullOrWhiteSpace(old)) continue;
-                    var restored = false;
-                    for (var attempt = 0; attempt < 3; attempt++)
-                    {
-                        try { desktop.SetWallpaper(path, old); restored = string.Equals(desktop.GetWallpaper(path), old, StringComparison.OrdinalIgnoreCase); if (restored) break; }
-                        catch (COMException) when (attempt < 2) { await Task.Delay(120 * (attempt + 1), cancellationToken); }
-                    }
-                    rollbackSucceeded &= restored;
-                }
+                rollbackSucceeded = await TryRollbackAsync(desktop, changed, previous).ConfigureAwait(false);
                 _log($"壁纸事务已回滚：{changed.Count} 台，结果={(rollbackSucceeded ? "成功" : "失败")}");
                 state.TryTransition(rollbackSucceeded ? WallpaperTransactionState.Failed : WallpaperTransactionState.RollbackFailed);
                 PublishTransaction(generation, state.Current, started, DateTime.UtcNow, applied, expected, retries, rollbackSucceeded, rollbackSucceeded ? "壁纸事务失败但已回滚" : "壁纸回滚失败，已停止自动切换");
@@ -184,27 +254,84 @@ public sealed class WallpaperApplyService
         {
             _log($"壁纸 COM 接口不可用：{ex.Message}");
             try { ExplorerUnavailable?.Invoke(ex.Message); } catch { }
-            state.TryTransition(WallpaperTransactionState.Failed);
-            PublishTransaction(generation, state.Current, started, DateTime.UtcNow, applied, expected, retries, rollbackSucceeded, "Explorer 壁纸接口暂不可用，保留当前壁纸");
-            return new ApplyResult(false, "Explorer 壁纸接口暂不可用，保留当前壁纸", applied);
+            if (desktop is not null && changed.Count > 0)
+            {
+                state.TryTransition(WallpaperTransactionState.RollingBack);
+                rollbackSucceeded = await TryRollbackAsync(desktop, changed, previous).ConfigureAwait(false);
+            }
+            state.TryTransition(rollbackSucceeded ? WallpaperTransactionState.Failed : WallpaperTransactionState.RollbackFailed);
+            var message = changed.Count == 0 ? "Explorer 壁纸接口暂不可用，保留当前壁纸"
+                : rollbackSucceeded ? "Explorer 壁纸接口暂不可用，已恢复原壁纸" : "Explorer 壁纸接口暂不可用，恢复原壁纸失败";
+            PublishTransaction(generation, state.Current, started, DateTime.UtcNow, applied, expected, retries, rollbackSucceeded, message);
+            return new ApplyResult(false, message, applied);
+        }
+        catch (Exception ex)
+        {
+            _log($"壁纸事务失败：{ex.Message}");
+            if (desktop is not null && changed.Count > 0)
+            {
+                state.TryTransition(WallpaperTransactionState.RollingBack);
+                rollbackSucceeded = await TryRollbackAsync(desktop, changed, previous).ConfigureAwait(false);
+            }
+            state.TryTransition(rollbackSucceeded ? WallpaperTransactionState.Failed : WallpaperTransactionState.RollbackFailed);
+            var message = changed.Count == 0 ? $"壁纸准备失败，整套保持不变：{ex.Message}"
+                : rollbackSucceeded ? "壁纸事务失败，已恢复原壁纸" : "壁纸事务失败，恢复原壁纸失败";
+            PublishTransaction(generation, state.Current, started, DateTime.UtcNow, applied, expected, retries, rollbackSucceeded, message);
+            return new ApplyResult(false, message, applied);
         }
         finally
         {
-            desktop?.Dispose();
-            _transactionGate.Release();
+            try
+            {
+                if (cacheProtected)
+                {
+                    var complete = TryReadCurrentWallpapers(desktop!, out var activeWallpapers);
+                    if (!complete)
+                    {
+                        // Explorer may still be unavailable. Keep both bounded
+                        // candidates and defer cleanup until a complete refresh.
+                        activeWallpapers.UnionWith(previous.Values);
+                        activeWallpapers.UnionWith(desired.Values);
+                    }
+                    _renderer.EndCacheProtection(activeWallpapers, complete);
+                }
+            }
+            finally
+            {
+                try { desktop?.Dispose(); }
+                finally { _transactionGate.Release(); }
+            }
         }
         var successResult = !failed && missing == 0 && applied == expected;
         if (successResult)
         {
             state.TryTransition(WallpaperTransactionState.Completed);
-            PublishTransaction(generation, state.Current, started, DateTime.UtcNow, applied, expected, retries, rollbackSucceeded, "壁纸事务应用并验证成功");
+            PublishTransaction(generation, state.Current, started, DateTime.UtcNow, applied, expected, retries, rollbackSucceeded, SuccessMessage(match, applied));
         }
         else if (state.Current is not WallpaperTransactionState.Failed and not WallpaperTransactionState.RollbackFailed and not WallpaperTransactionState.Cancelled)
         {
             state.TryTransition(WallpaperTransactionState.Failed);
             PublishTransaction(generation, state.Current, started, DateTime.UtcNow, applied, expected, retries, rollbackSucceeded, $"已应用 {applied}/{expected} 台；缺失 {missing} 台");
         }
-        return new ApplyResult(successResult, successResult ? "壁纸事务应用并验证成功" : $"已应用 {applied}/{expected} 台；缺失 {missing} 台", applied);
+        return new ApplyResult(successResult, successResult ? SuccessMessage(match, applied) : $"已应用 {applied}/{expected} 台；缺失 {missing} 台", applied);
+    }
+
+    private static string SuccessMessage(MatchResult match, int applied)
+        => match.IsGeneric
+            ? $"通用壁纸已应用并验证：{applied} 台；{match.UnassignedMonitorCount} 台保留当前壁纸"
+            : "壁纸事务应用并验证成功";
+
+    private static bool IsGenericLayoutCurrent(IWallpaperDesktop desktop, IReadOnlyList<MonitorIdentity> expected)
+    {
+        var paths = new HashSet<string>(desktop.GetMonitorDevicePaths(), StringComparer.OrdinalIgnoreCase);
+        if (paths.Count != expected.Count || !paths.SetEquals(expected.Select(monitor => monitor.MonitorDevicePath))) return false;
+        foreach (var monitor in expected)
+        {
+            var bounds = desktop.GetMonitorBounds(monitor.MonitorDevicePath);
+            if (bounds is not null && (bounds.X != monitor.DesktopX || bounds.Y != monitor.DesktopY
+                || bounds.Width != monitor.Width || bounds.Height != monitor.Height)) return false;
+        }
+        return true;
     }
 
     private void PublishTransaction(long generation, WallpaperTransactionState state, DateTime started, DateTime? completed, int applied, int expected, int retries, bool rollbackSucceeded, string message)
@@ -222,7 +349,7 @@ public sealed class WallpaperApplyService
         var success = true;
         foreach (var path in changed.AsEnumerable().Reverse())
         {
-            if (!previous.TryGetValue(path, out var old) || string.IsNullOrWhiteSpace(old)) continue;
+            if (!previous.TryGetValue(path, out var old)) { success = false; continue; }
             var restored = false;
             for (var attempt = 0; attempt < 3 && !restored; attempt++)
             {
@@ -232,7 +359,9 @@ public sealed class WallpaperApplyService
                     await Task.Delay(120 * (attempt + 1)).ConfigureAwait(false);
                     restored = string.Equals(desktop.GetWallpaper(path), old, StringComparison.OrdinalIgnoreCase);
                 }
-                catch (COMException) when (attempt < 2) { }
+                // A failed screen must not prevent recovery of the remaining
+                // screens, regardless of the underlying exception type.
+                catch (Exception) { }
             }
             success &= restored;
         }
@@ -249,13 +378,19 @@ public sealed class WallpaperApplyService
     {
         private readonly IDesktopWallpaper _desktop = (IDesktopWallpaper)new DesktopWallpaper();
         public IReadOnlyList<string> GetMonitorDevicePaths()
-        {
-            var result = new List<string>();
-            var count = _desktop.GetMonitorDevicePathCount();
-            for (uint i = 0; i < count; i++) result.Add(_desktop.GetMonitorDevicePathAt(i));
-            return result;
-        }
+            => MonitorDiscoveryService.GetActiveMonitorDevicePaths();
         public string GetWallpaper(string path) => _desktop.GetWallpaper(path);
+        public WallpaperMonitorBounds? GetMonitorBounds(string path)
+            => ReadActiveBounds(path) ?? throw new COMException("显示器已断开，无法核对当前布局。");
+
+        private WallpaperMonitorBounds? ReadActiveBounds(string path)
+        {
+            var result = _desktop.GetMonitorRECT(path, out var rect);
+            if (result == 1) return null; // S_FALSE: remembered, but not attached.
+            Marshal.ThrowExceptionForHR(result);
+            if (rect.Right <= rect.Left || rect.Bottom <= rect.Top) return null;
+            return new WallpaperMonitorBounds(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top);
+        }
         public void SetWallpaper(string path, string wallpaper) => _desktop.SetWallpaper(path, wallpaper);
         public void SetSpanPosition() => _desktop.SetPosition(DesktopWallpaperPosition.Span);
         public void Dispose() { if (Marshal.IsComObject(_desktop)) Marshal.ReleaseComObject(_desktop); }
@@ -269,7 +404,7 @@ public sealed class WallpaperApplyService
         [return: MarshalAs(UnmanagedType.LPWStr)] string GetWallpaper([MarshalAs(UnmanagedType.LPWStr)] string monitorID);
         [return: MarshalAs(UnmanagedType.LPWStr)] string GetMonitorDevicePathAt(uint monitorIndex);
         uint GetMonitorDevicePathCount();
-        RECT GetMonitorRECT([MarshalAs(UnmanagedType.LPWStr)] string monitorID);
+        [PreserveSig] int GetMonitorRECT([MarshalAs(UnmanagedType.LPWStr)] string monitorID, out RECT displayRect);
         void SetBackgroundColor(uint color);
         uint GetBackgroundColor();
         void SetPosition(DesktopWallpaperPosition position);
@@ -290,10 +425,12 @@ public sealed class WallpaperApplyService
 }
 
 public sealed record ApplyResult(bool Success, string Message, int AppliedCount);
+public sealed record WallpaperMonitorBounds(int X, int Y, int Width, int Height);
 
 public interface IWallpaperDesktop : IDisposable
 {
     IReadOnlyList<string> GetMonitorDevicePaths();
+    WallpaperMonitorBounds? GetMonitorBounds(string monitorDevicePath) => null;
     string GetWallpaper(string monitorDevicePath);
     void SetWallpaper(string monitorDevicePath, string wallpaper);
     void SetSpanPosition();

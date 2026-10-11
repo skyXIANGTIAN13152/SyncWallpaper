@@ -19,7 +19,7 @@ public class ThemeTests
             CollectionAssert.AreEquivalent(AppThemeCatalog.Aurora.Colors.Keys.ToArray(), theme.Colors.Keys.ToArray());
             Assert.IsTrue(theme.Colors.Values.All(value => value.Length == 7 && value[0] == '#'));
         }
-        Assert.AreEqual(3, AppThemeCatalog.All.Select(x => x.Id).Distinct().Count());
+        Assert.AreEqual(4, AppThemeCatalog.All.Select(x => x.Id).Distinct().Count());
     }
 
     [TestMethod]
@@ -58,9 +58,9 @@ public class ThemeTests
     }
 
     [TestMethod]
-    public void MissingOrUnknownThemeSafelyUsesAurora()
+    public void MissingOrUnknownThemeSafelyUsesMystery()
     {
-        foreach (var value in new string?[] { null, "", "deleted-theme", "aurora" })
+        foreach (var value in new string?[] { null, "", "deleted-theme", "mystery" })
         {
             var settings = new AppSettings { SchemaVersion = 3, UiTheme = value! };
             Assert.IsTrue(AppSettingsMigrator.Migrate(settings));
@@ -138,6 +138,27 @@ public class ThemeTests
             Assert.IsTrue(glyph.Height > 0);
             Assert.IsTrue(host.ViewportHeight >= glyph.Height,
                 $"Height {height}, scale {scale}: viewport {host.ViewportHeight} clips a {glyph.Height}-pixel line.");
+        });
+    }
+
+    [DataTestMethod]
+    [DataRow(29d)]
+    [DataRow(35d)]
+    [DataRow(44d)]
+    [DataRow(96d)]
+    public void BrandGlyphFitsCompactAndLargeLayoutSlots(double side)
+    {
+        RunSta(() =>
+        {
+            var glyph = new BrandGlyph { Width = side, Height = side, Stroke = Brushes.Goldenrod };
+            var host = new Border { Width = side, Height = side, Child = glyph, ClipToBounds = true };
+            host.Measure(new Size(side, side));
+            host.Arrange(new Rect(0, 0, side, side));
+            host.UpdateLayout();
+            var ink = VisualTreeHelper.GetContentBounds(glyph);
+            Assert.IsFalse(ink.IsEmpty);
+            Assert.IsTrue(ink.Left >= 0 && ink.Top >= 0 && ink.Right <= side && ink.Bottom <= side,
+                $"The {side}-pixel icon is clipped: ink bounds {ink}, render size {glyph.RenderSize}.");
         });
     }
 
