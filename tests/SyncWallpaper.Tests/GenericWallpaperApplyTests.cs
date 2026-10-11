@@ -97,14 +97,7 @@ public sealed class GenericWallpaperApplyTests
     }
 
     private static void RunSta(Action test)
-    {
-        Exception? failure = null;
-        var thread = new Thread(() => { try { test(); } catch (Exception ex) { failure = ex; } }) { IsBackground = true };
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        Assert.IsTrue(thread.Join(TimeSpan.FromSeconds(30)), "Wallpaper cache regression did not complete.");
-        if (failure is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
-    }
+        => WpfTestThread.Run(test, timeoutSeconds: 30);
 
     [TestMethod]
     public async Task ExactGenericLayoutWritesConfiguredScreensAndPreservesBlankSlot()

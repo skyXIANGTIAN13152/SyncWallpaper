@@ -1,4 +1,4 @@
-# 屏序 SyncWallpaper 1.2.0-beta.7
+# 屏序 SyncWallpaper 1.2.0-beta.8
 
 这是 1.2 系列首次公开发布，集中带来**通用壁纸组合、秘境界面、透明镂空图标和全页面滚动体验更新**。本版本沿用 Beta 预发布渠道，界面为中文。
 
@@ -34,11 +34,11 @@
 
 ## 下载与升级
 
-- **推荐：`SyncWallpaper-1.2.0-beta.7-win-x64-selfcontained.zip`**，自带所需运行环境。
-- `SyncWallpaper-1.2.0-beta.7-win-x64.zip` 为较小的普通包，需要 .NET 8 Desktop Runtime（x64）。
+- **推荐：`SyncWallpaper-1.2.0-beta.8-win-x64-selfcontained.zip`**，自带所需运行环境。
+- `SyncWallpaper-1.2.0-beta.8-win-x64.zip` 为较小的普通包，需要 .NET 8 Desktop Runtime（x64）。
 - 两种下载均提供单独的 SHA-256 文件和汇总 `SHA256SUMS.txt`。
 
-新用户解压后运行 `App/SyncWallpaper.App.exe`。升级前先从托盘退出旧程序：便携版将发布包内容覆盖到原目录（含新版卸载脚本），保留 `Config`、`Wallpapers` 等数据目录；脚本安装的版本按[升级说明](https://github.com/skyXIANGTIAN13152/SyncWallpaper/blob/v1.2.0-beta.7/docs/UPGRADE.md)操作。[首次安装说明](https://github.com/skyXIANGTIAN13152/SyncWallpaper/blob/v1.2.0-beta.7/docs/INSTALLATION.md)也随包提供。
+新用户解压后运行 `App/SyncWallpaper.App.exe`。升级前先从托盘退出旧程序：便携版将发布包内容覆盖到原目录（含新版卸载脚本），保留 `Config`、`Wallpapers` 等数据目录；脚本安装的版本按[升级说明](https://github.com/skyXIANGTIAN13152/SyncWallpaper/blob/v1.2.0-beta.8/docs/UPGRADE.md)操作。[首次安装说明](https://github.com/skyXIANGTIAN13152/SyncWallpaper/blob/v1.2.0-beta.8/docs/INSTALLATION.md)也随包提供。
 
 Windows 10/11 x64；本版本未进行代码签名。Windows 10、真实睡眠唤醒、Explorer 强制重启和更多混合 DPI 硬件组合仍需持续验证。
 

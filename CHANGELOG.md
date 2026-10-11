@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.0-beta.7 — 2026-10-12
+## 1.2.0-beta.8 — 2026-10-12
 
 First public release in the 1.2 series: generic wallpaper profiles and the Mystery desktop redesign. The earlier 1.2 beta entries below describe local development iterations included in this release.
 

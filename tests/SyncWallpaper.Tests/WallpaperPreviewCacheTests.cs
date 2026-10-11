@@ -1,4 +1,3 @@
-using System.Runtime.ExceptionServices;
 using SyncWallpaper.App;
 
 namespace SyncWallpaper.Tests;
@@ -33,12 +32,5 @@ public class WallpaperPreviewCacheTests
     }
 
     private static void RunSta(Action test)
-    {
-        Exception? failure = null;
-        var thread = new Thread(() => { try { test(); } catch (Exception ex) { failure = ex; } }) { IsBackground = true };
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        Assert.IsTrue(thread.Join(TimeSpan.FromSeconds(20)), "Wallpaper preview regression test did not complete.");
-        if (failure is not null) ExceptionDispatchInfo.Capture(failure).Throw();
-    }
+        => WpfTestThread.Run(test);
 }
