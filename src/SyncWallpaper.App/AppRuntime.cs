@@ -35,6 +35,7 @@ public sealed class AppRuntime : IDisposable
         IsRecognizing, Settings.AutoMatchEnabled, StatusText, LastMatch?.IsGeneric == true);
 
     public event EventHandler? StateChanged;
+    public event EventHandler<UpdateCheckCompletedEventArgs>? UpdateCheckCompleted;
 
     private readonly MonitorDiscoveryService _discovery = new();
     private readonly ProfileMatcher _matcher = new();
@@ -152,7 +153,7 @@ public sealed class AppRuntime : IDisposable
         // Bypass the debounce at sign-in so an already-connected saved
         // topology begins its wallpaper transaction without another event.
         _coordinator.Signal(manual: true);
-        if (Settings.AutomaticUpdateCheckEnabled && ProjectLinks.IsConfigured)
+        if (!suppressAutoMatch && ProjectLinks.IsConfigured)
             _ = ScheduleAutomaticUpdateCheckAsync();
         RaiseChanged();
     }
@@ -613,23 +614,29 @@ public sealed class AppRuntime : IDisposable
 
     public async Task<UpdateCheckResult> CheckForUpdatesAsync(bool manual = true, CancellationToken cancellationToken = default)
     {
-        var settings = new UpdateCheckSettings
-        {
-            AutomaticCheckEnabled = Settings.AutomaticUpdateCheckEnabled,
-            Channel = ParseUpdateChannel(Settings.UpdateChannel),
-            LastSuccessfulCheckUtc = Settings.LastUpdateSuccessfulCheckUtc,
-            LastAttemptUtc = Settings.LastUpdateAttemptUtc
-        };
-        if (!manual && !UpdateCheckScheduler.ShouldRunAutomaticCheck(settings, DateTimeOffset.UtcNow))
-            return LastUpdateResult ?? new UpdateCheckResult(UpdateCheckStatus.UpToDate, null, null, null, null, null, null, "自动更新检查尚未到期。", "七天检查间隔尚未到期。");
-
-        await _updateGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _updateLifetime.Token);
+        var cancelled = new UpdateCheckResult(UpdateCheckStatus.Cancelled, null, null, null, null, null, null, "已取消更新检查。", "调用方取消了请求。");
+        try { await _updateGate.WaitAsync(linked.Token).ConfigureAwait(false); }
+        catch (OperationCanceledException) { return cancelled; }
         try
         {
+            if (_disposed) return cancelled;
+            var settings = new UpdateCheckSettings
+            {
+                AutomaticCheckEnabled = Settings.AutomaticUpdateCheckEnabled,
+                Channel = ParseUpdateChannel(Settings.UpdateChannel),
+                LastSuccessfulCheckUtc = Settings.LastUpdateSuccessfulCheckUtc,
+                LastAttemptUtc = Settings.LastUpdateAttemptUtc
+            };
+            // Recheck after acquiring the gate: a manual check may have just
+            // completed, or the user may have disabled checks while this waited.
+            if (!manual && !UpdateCheckScheduler.ShouldRunAutomaticCheck(settings, DateTimeOffset.UtcNow))
+                return LastUpdateResult ?? new UpdateCheckResult(UpdateCheckStatus.UpToDate, null, null, null, null, null, null, "自动更新检查尚未到期。", "每天检查一次，失败后至少一小时再重试。");
             Settings.LastUpdateAttemptUtc = DateTimeOffset.UtcNow;
             TrySaveSettings();
             RaiseChanged();
-            var result = await _releaseChecker.CheckAsync(settings.Channel, cancellationToken).ConfigureAwait(false);
+            var result = await _releaseChecker.CheckAsync(settings.Channel, linked.Token).ConfigureAwait(false);
+            if (_disposed) return result;
             LastUpdateResult = result;
             UpdateCheckScheduler.RecordResult(settings, result, DateTimeOffset.UtcNow);
             Settings.LastUpdateAttemptUtc = settings.LastAttemptUtc;
@@ -638,13 +645,13 @@ public sealed class AppRuntime : IDisposable
             if (result.IsSuccess) _log.Info("Update", result.UserMessage ?? "GitHub Release 检查完成");
             else if (manual) _log.Warn("Update", result.TechnicalMessage ?? result.UserMessage ?? "GitHub Release 检查失败");
             RaiseChanged();
+            UpdateCheckCompleted?.Invoke(this, new UpdateCheckCompletedEventArgs(result, manual));
             return result;
         }
         catch (OperationCanceledException)
         {
-            LastUpdateResult = new UpdateCheckResult(UpdateCheckStatus.Cancelled, null, null, null, null, null, null, "已取消更新检查。", "调用方取消了请求。");
-            RaiseChanged();
-            return LastUpdateResult;
+            if (!_disposed) { LastUpdateResult = cancelled; RaiseChanged(); }
+            return cancelled;
         }
         finally { _updateGate.Release(); }
     }
@@ -669,7 +676,17 @@ public sealed class AppRuntime : IDisposable
     {
         Settings.UpdateChannel = ParseUpdateChannel(Settings.UpdateChannel).ToString();
         TrySaveSettings();
+        RaiseChanged();
     }
+
+    public void RecordUpdatePrompt(string version)
+    {
+        Settings.LastUpdatePromptVersion = version;
+        Settings.LastUpdatePromptUtc = DateTimeOffset.UtcNow;
+        TrySaveSettings();
+    }
+
+    public void LogUpdateFailure(string message) => _log.Warn("Update", message);
 
     public void OpenFolder(string path)
     {
@@ -681,9 +698,14 @@ public sealed class AppRuntime : IDisposable
     {
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(2), _updateLifetime.Token).ConfigureAwait(false);
-            if (!_updateLifetime.IsCancellationRequested)
-                await CheckForUpdatesAsync(false, _updateLifetime.Token).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromSeconds(20), _updateLifetime.Token).ConfigureAwait(false);
+            while (!_updateLifetime.IsCancellationRequested)
+            {
+                try { await CheckForUpdatesAsync(false, _updateLifetime.Token).ConfigureAwait(false); }
+                catch (OperationCanceledException) when (_updateLifetime.IsCancellationRequested) { break; }
+                catch (Exception ex) { _log.Warn("Update", "自动更新检查失败，将稍后重试：" + ex.Message); }
+                await Task.Delay(TimeSpan.FromHours(1), _updateLifetime.Token).ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { _log.Warn("Update", "自动更新检查失败：" + ex.Message); }
@@ -980,8 +1002,8 @@ public sealed class AppRuntime : IDisposable
         TrySaveSettings();
         Store.Save("profiles.json", Profiles);
         _updateHttpClient.Dispose();
-        _updateGate.Dispose();
-        _updateLifetime.Dispose();
+        // A cancelled check may still be unwinding and releasing its semaphore.
+        // These managed synchronization objects are reclaimed with this runtime.
     }
 
     private void RaiseChanged() => StateChanged?.Invoke(this, EventArgs.Empty);

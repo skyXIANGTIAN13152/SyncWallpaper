@@ -33,6 +33,7 @@ public partial class App : System.Windows.Application
 
         _runtime = new AppRuntime();
         ThemeManager.Apply(_runtime.Settings.UiTheme);
+        InitializeUpdateSupport();
         _runtime.StateChanged += (_, _) => Dispatcher.InvokeAsync(UpdateTray);
         _trayState = _runtime.TrayVisualState;
         _tray = new NotifyIcon
@@ -46,6 +47,7 @@ public partial class App : System.Windows.Application
         _singleInstance.StartActivationListener(() => Dispatcher.InvokeAsync(ShowMainWindow));
         _runtime.Start(_validationMode);
         if (!background) ShowMainWindow();
+        SignalUpdateStartupReady(e.Args);
     }
 
     private ContextMenuStrip BuildTrayMenu()
@@ -71,8 +73,7 @@ public partial class App : System.Windows.Application
             var result = await _runtime.CheckForUpdatesAsync(true);
             if (result.Status == UpdateCheckStatus.UpdateAvailable)
             {
-                ShowMainWindow();
-                _tray?.ShowBalloonTip(2500, "屏序 SyncWallpaper", result.UserMessage ?? "发现新版本", ToolTipIcon.Info);
+                // The shared update flow prompts after any open editor is closed.
             }
             else if (result.Status == UpdateCheckStatus.UpToDate)
                 _tray?.ShowBalloonTip(1800, "屏序 SyncWallpaper", "当前已是最新版本。", ToolTipIcon.Info);
@@ -149,6 +150,13 @@ public partial class App : System.Windows.Application
 
     private void ShutdownFromTray()
     {
+        if (_updateWindow is { IsBusy: true, HandoffReady: false })
+        {
+            _updateWindow.Activate();
+            return;
+        }
+        _shuttingDown = true;
+        _updatePromptTimer?.Stop();
         if (_window is not null) _window.AllowExit = true;
         _runtime?.Dispose();
         _tray?.Dispose();
@@ -158,6 +166,8 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _shuttingDown = true;
+        _updatePromptTimer?.Stop();
         _runtime?.Dispose();
         _tray?.Dispose();
         _singleInstance?.Dispose();

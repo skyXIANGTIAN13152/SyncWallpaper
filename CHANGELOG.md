@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0-beta.1 — 2026-10-13
+
+- Check GitHub Releases automatically once per day, with hourly retry limits after failures and clock-rollback protection. Keep manual checking available and preserve existing automatic-check preferences during upgrade.
+- Ask before updating. After confirmation, download the matching Windows x64 package, verify its SHA-256 checksum and package contents, replace program components through a short-lived helper and restart the app.
+- Preserve existing wallpaper profiles, original images, settings and other user data during installation; retain the old program files for rollback if replacement fails.
+- Include the update helper in both framework-dependent and self-contained releases, with a package manifest recording the explicit confirmation requirement.
+- Add maximize/restore controls and title-bar double-click to the profile editor, and fit its initial size to the current display work area.
+
 ## 1.2.0-beta.8 — 2026-10-12
 
 First public release in the 1.2 series: generic wallpaper profiles and the Mystery desktop redesign. The earlier 1.2 beta entries below describe local development iterations included in this release.

@@ -2,10 +2,21 @@ namespace SyncWallpaper.Update.Core;
 
 public static class UpdateCheckScheduler
 {
-    public static readonly TimeSpan AutomaticInterval = TimeSpan.FromDays(7);
+    public static readonly TimeSpan AutomaticInterval = TimeSpan.FromDays(1);
+    public static readonly TimeSpan RetryInterval = TimeSpan.FromHours(1);
 
-    public static bool ShouldRunAutomaticCheck(UpdateCheckSettings settings, DateTimeOffset nowUtc)
-        => settings is not null && settings.ShouldRunAutomaticCheck(nowUtc, AutomaticInterval);
+    public static bool ShouldRunAutomaticCheck(UpdateCheckSettings settings, DateTimeOffset nowUtc, TimeSpan? interval = null)
+    {
+        if (settings is null || !settings.AutomaticCheckEnabled) return false;
+
+        // Check both timestamps: a more recent failed attempt must still throttle an
+        // overdue successful check, and clock rollback must not cause request loops.
+        if (settings.LastSuccessfulCheckUtc is { } success
+            && (nowUtc < success || nowUtc - success < (interval ?? AutomaticInterval))) return false;
+        if (settings.LastAttemptUtc is { } attempt
+            && (nowUtc < attempt || nowUtc - attempt < RetryInterval)) return false;
+        return true;
+    }
 
     public static bool TryRecordAttempt(UpdateCheckSettings settings, DateTimeOffset nowUtc)
     {

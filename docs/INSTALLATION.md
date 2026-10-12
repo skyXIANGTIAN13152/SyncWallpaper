@@ -4,6 +4,8 @@
 
 Portable：解压后运行 `App\SyncWallpaper.App.exe`。已有安装请按[升级说明](UPGRADE.md)覆盖发行文件并保留数据目录。
 
+1.3 开始，发行包的 `App` 目录包含按需运行的更新助手。应用内确认更新后会下载自带运行时的 x64 包，因此 framework-dependent 安装也可以升级为自包含安装，无需重新配置组合和壁纸。
+
 当前用户安装：
 
 ```powershell

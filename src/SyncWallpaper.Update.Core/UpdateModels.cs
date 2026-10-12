@@ -31,15 +31,7 @@ public sealed class UpdateCheckSettings
     public string? ETag { get; set; }
 
     public bool ShouldRunAutomaticCheck(DateTimeOffset nowUtc, TimeSpan? interval = null)
-    {
-        if (!AutomaticCheckEnabled) return false;
-        var period = interval ?? TimeSpan.FromDays(7);
-        var last = LastSuccessfulCheckUtc ?? LastAttemptUtc;
-        if (last is null) return true;
-        // A clock rollback must not turn into a tight request loop.
-        if (nowUtc < last.Value) return false;
-        return nowUtc - last.Value >= period;
-    }
+        => UpdateCheckScheduler.ShouldRunAutomaticCheck(this, nowUtc, interval);
 }
 
 public sealed class GitHubRepositorySettings
@@ -94,8 +86,9 @@ public sealed record UpdateCheckResult(
 {
     public SemanticVersion? CurrentSemanticVersion { get; init; }
     public SemanticVersion? LatestSemanticVersion { get; init; }
+    public UpdatePackage? Package { get; init; }
     public bool IsUpdateAvailable => Status == UpdateCheckStatus.UpdateAvailable;
-    public bool IsSuccess => Status is UpdateCheckStatus.UpdateAvailable or UpdateCheckStatus.UpToDate;
+    public bool IsSuccess => Status is UpdateCheckStatus.UpdateAvailable or UpdateCheckStatus.UpToDate or UpdateCheckStatus.NoEligibleRelease;
 }
 
 public sealed record GitHubRelease(
@@ -106,7 +99,21 @@ public sealed record GitHubRelease(
     bool Draft,
     bool Prerelease,
     DateTimeOffset? PublishedAt,
-    DateTimeOffset? CreatedAt);
+    DateTimeOffset? CreatedAt)
+{
+    public IReadOnlyList<GitHubReleaseAsset> Assets { get; init; } = Array.Empty<GitHubReleaseAsset>();
+}
+
+public sealed record GitHubReleaseAsset(string Name, Uri DownloadUrl, long Size, string? Digest);
+
+public sealed record UpdatePackage(string Version, string AssetName, Uri DownloadUrl, long Size, string? Sha256, Uri? ChecksumUrl);
+
+public sealed record PreparedUpdate(string WorkDirectory, string PackageDirectory, string Version);
+
+public sealed record UpdateDownloadProgress(long BytesReceived, long? TotalBytes, string Stage)
+{
+    public double? Percent => TotalBytes is > 0 ? Math.Clamp(BytesReceived * 100d / TotalBytes.Value, 0, 100) : null;
+}
 
 public sealed class GitHubReleaseResponse
 {
@@ -118,6 +125,15 @@ public sealed class GitHubReleaseResponse
     [JsonPropertyName("prerelease")] public bool Prerelease { get; set; }
     [JsonPropertyName("published_at")] public DateTimeOffset? PublishedAt { get; set; }
     [JsonPropertyName("created_at")] public DateTimeOffset? CreatedAt { get; set; }
+    [JsonPropertyName("assets")] public List<GitHubReleaseAssetResponse>? Assets { get; set; }
+}
+
+public sealed class GitHubReleaseAssetResponse
+{
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("browser_download_url")] public string? BrowserDownloadUrl { get; set; }
+    [JsonPropertyName("size")] public long Size { get; set; }
+    [JsonPropertyName("digest")] public string? Digest { get; set; }
 }
 
 public sealed class UpdateCheckCache

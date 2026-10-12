@@ -28,6 +28,18 @@ foreach ($entry in $projects.GetEnumerator()) {
     if ($LASTEXITCODE -ne 0) { throw "Publish failed for $($entry.Key)." }
 }
 
+# The helper shares the App runtime files and is copied to a temporary directory
+# before use, so it can replace the installed App directory after the UI exits.
+$updaterProject = Join-Path $PSScriptRoot "src\SyncWallpaper.Updater\SyncWallpaper.Updater.csproj"
+$appOutput = Join-Path $output "App"
+& $dotnet publish $updaterProject -c Release -r win-x64 --self-contained $selfContainedValue -p:DebugType=None -p:DebugSymbols=false -o $appOutput
+if ($LASTEXITCODE -ne 0) { throw "Publish failed for Updater." }
+foreach ($requiredUpdaterFile in @("SyncWallpaper.Updater.exe", "SyncWallpaper.Updater.dll", "SyncWallpaper.Updater.deps.json", "SyncWallpaper.Updater.runtimeconfig.json")) {
+    if (-not (Test-Path -LiteralPath (Join-Path $appOutput $requiredUpdaterFile) -PathType Leaf)) {
+        throw "The update helper is missing from the package: $requiredUpdaterFile"
+    }
+}
+
 Copy-Item (Join-Path $PSScriptRoot "README.md"), (Join-Path $PSScriptRoot "LICENSE"), (Join-Path $PSScriptRoot "CHANGELOG.md"), (Join-Path $PSScriptRoot "THIRD-PARTY-NOTICES.md") $output -Force
 Copy-Item (Join-Path $PSScriptRoot "assets\AppIcon.ico") $output -Force
 Copy-Item (Join-Path $PSScriptRoot "assets\syncwallpaper-icon.svg") $output -Force
@@ -46,11 +58,12 @@ $manifest = [ordered]@{
     rid = "win-x64"
     selfContained = [bool]$SelfContained
     layout = "App/ Diagnostics/"
-    updateMode = "GitHub Releases page; user initiated download and install"
+    updateMode = "Daily GitHub release checks; download and install after user confirmation"
     telemetry = $false
-    automaticDownload = $false
-    automaticInstall = $false
-    containsUpdater = $false
+    automaticDownload = $true
+    automaticInstall = $true
+    userConfirmationRequired = $true
+    containsUpdater = $true
     startupDefault = $false
     systemMutationDefault = $false
     signed = $false
@@ -69,7 +82,6 @@ Compress-Archive -Path (Join-Path $output "*") -DestinationPath $zipPath -Compre
 $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
 Set-Content -LiteralPath $hashPath -Value ($hash + "  " + (Split-Path $zipPath -Leaf)) -Encoding ASCII
 
-if (Get-ChildItem -Path $output -Recurse -File -Filter "*Updater*.exe" -ErrorAction SilentlyContinue) { throw "发布目录意外包含 Updater.exe。" }
 $sumLines = Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot "artifacts\publish") -File -Filter "*.zip" |
     Sort-Object Name |
     ForEach-Object { $fileHash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(); "$fileHash  $($_.Name)" }

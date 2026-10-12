@@ -15,4 +15,4 @@ if ($LASTEXITCODE -ne 0) { throw "Release 构建失败。" }
 if ($LASTEXITCODE -ne 0) { throw "Release 测试失败。" }
 & (Join-Path $root "publish.ps1") -SelfContained:$SelfContained
 if ($LASTEXITCODE -ne 0) { throw "发布包构建失败。" }
-Write-Host "完成：发布包只包含用户主动下载/安装所需文件，不包含 Updater.exe。"
+Write-Host "完成：发布包包含更新助手；应用内下载与安装必须先由用户确认。"

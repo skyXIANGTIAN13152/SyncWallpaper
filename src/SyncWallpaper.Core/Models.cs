@@ -153,11 +153,13 @@ public sealed class AppSettings
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ActiveProfileId { get; set; }
     public string? DataRoot { get; set; }
-    /// <summary>GitHub Release checks are opt-in and never download or install files.</summary>
-    public bool AutomaticUpdateCheckEnabled { get; set; } = false;
+    /// <summary>Check GitHub automatically; downloading and installation still require confirmation.</summary>
+    public bool AutomaticUpdateCheckEnabled { get; set; } = true;
     public string UpdateChannel { get; set; } = "Stable";
     public DateTimeOffset? LastUpdateSuccessfulCheckUtc { get; set; }
     public DateTimeOffset? LastUpdateAttemptUtc { get; set; }
+    public string? LastUpdatePromptVersion { get; set; }
+    public DateTimeOffset? LastUpdatePromptUtc { get; set; }
 }
 
 public sealed class LibraryDocument

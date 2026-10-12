@@ -438,8 +438,18 @@ public partial class WallpaperProfileEditorWindow : Window
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ChangedButton == MouseButton.Left) try { DragMove(); } catch (InvalidOperationException) { }
+        if (e.ChangedButton != MouseButton.Left) return;
+        if (e.ClickCount == 2)
+        {
+            MaximizeRestore_Click(sender, e);
+            e.Handled = true;
+            return;
+        }
+        try { DragMove(); } catch (InvalidOperationException) { }
     }
+
+    private void MaximizeRestore_Click(object sender, RoutedEventArgs e)
+        => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
     private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {

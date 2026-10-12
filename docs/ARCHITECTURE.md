@@ -2,6 +2,8 @@
 
 屏序只有一个常驻主进程 `SyncWallpaper.App.exe`。它负责单实例、托盘、配置、日志、显示器变化协调、壁纸档案、组合匹配和壁纸事务。产品不再包含模块管理器或任何额外功能宿主进程。
 
+用户确认安装更新时，独立的 `SyncWallpaper.Updater.exe` 从临时位置短暂运行，等待主程序退出后替换程序组件并重启；平时不驻留。
+
 ```text
 Windows 显示/设备/电源/Explorer 事件
                     │
@@ -26,7 +28,8 @@ Windows 显示/设备/电源/Explorer 事件
 - `SyncWallpaper.Windows`：只读显示器发现、Windows 消息、WMI、Explorer 恢复、壁纸库/渲染/应用、启动项和日志。
 - `SyncWallpaper.App`：WPF 主界面、托盘和壁纸专用运行时。
 - `SyncWallpaper.Diagnostics`：只读显示器/壁纸快照与检测压力测试。
-- `SyncWallpaper.Update.Core`：仅检查 GitHub Release，不下载或安装。
+- `SyncWallpaper.Update.Core`：GitHub Release 查询、每日检查策略、版本与来源校验、发行包下载及安全解包。
+- `SyncWallpaper.Updater`：用户确认后的程序替换、失败回滚和重启；不改写用户组合与壁纸。
 
 ## 显示 API 边界
 
@@ -39,6 +42,8 @@ Windows 显示/设备/电源/Explorer 事件
 ## 数据
 
 运行数据只包括 `Config`、`Wallpapers`、`Cache`、`Thumbnails` 和 `Logs`。配置使用临时文件写完并刷新磁盘后原子替换，不生成历史恢复点或壁纸删除备份。
+
+更新使用独立临时目录保存已校验的新程序和替换期间所需的旧程序文件；这些不是配置历史或壁纸备份，不会写入发布包。
 
 ## 故障隔离
 

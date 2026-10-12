@@ -48,8 +48,9 @@ public sealed class GitHubReleaseChecker : IReleaseUpdateChecker
         {
             using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutSource.CancelAfter(_timeout);
-            var endpoint = channel == UpdateChannel.Beta ? _repository.ApiReleases : _repository.ApiLatestRelease;
-            using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
+            // /latest is 404 when a repository only has prereleases, and it may
+            // point at a different language edition. Filter the release list locally.
+            using var request = new HttpRequestMessage(HttpMethod.Get, _repository.ApiReleases);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
             request.Headers.TryAddWithoutValidation("X-GitHub-Api-Version", "2022-11-28");
             request.Headers.UserAgent.ParseAdd($"SyncWallpaper/{_currentVersionText}");
@@ -67,7 +68,7 @@ public sealed class GitHubReleaseChecker : IReleaseUpdateChecker
                 return Result(UpdateCheckStatus.Failed, current, null, "暂时无法检查更新，请稍后重试。", $"GitHub HTTP {(int)response.StatusCode}。", started);
 
             var json = await ReadLimitedAsync(response, 2 * 1024 * 1024, timeoutSource.Token).ConfigureAwait(false);
-            var parsedResponse = ParseReleases(json, channel);
+            var parsedResponse = ParseReleases(json);
             if (parsedResponse.InvalidUrl)
                 return Result(UpdateCheckStatus.InvalidResponse, current, null, "暂时无法检查更新，请稍后重试。", "Release html_url 未通过 GitHub URL 校验。", started);
             // Language suffixes are separate distributions, not newer feature builds.
@@ -75,10 +76,11 @@ public sealed class GitHubReleaseChecker : IReleaseUpdateChecker
             var englishEdition = IsEnglishEdition(_currentVersionText);
             var candidate = ReleaseVersionComparer.SelectHighest(
                 parsedResponse.Releases.Where(release => IsEnglishEdition(release.TagName) == englishEdition), channel);
+            var noReleaseMessage = channel == UpdateChannel.Stable ? "当前暂无稳定版发布。" : "当前暂无测试版发布。";
             if (candidate is null)
-                return Result(UpdateCheckStatus.NoEligibleRelease, current, null, "没有符合当前更新渠道的版本。", "没有可用的非草稿 Release。", started);
+                return Result(UpdateCheckStatus.NoEligibleRelease, current, null, noReleaseMessage, "当前语言和更新渠道没有可用的非草稿 Release。", started);
             if (!SemanticVersion.TryParse(candidate.TagName, out var latest))
-                return Result(UpdateCheckStatus.NoEligibleRelease, current, null, "没有符合当前更新渠道的版本。", "Release tag 不是有效的 SemVer。", started);
+                return Result(UpdateCheckStatus.NoEligibleRelease, current, null, noReleaseMessage, "Release tag 不是有效的 SemVer。", started);
             if (!ReleaseUrlValidator.TryValidate(candidate.HtmlUrl.ToString(), _repository, out var releaseUrl))
                 return Result(UpdateCheckStatus.InvalidResponse, current, latest, "暂时无法检查更新，请稍后重试。", "Release html_url 未通过 GitHub URL 校验。", started);
 
@@ -91,7 +93,8 @@ public sealed class GitHubReleaseChecker : IReleaseUpdateChecker
                 userMessage, null)
             {
                 CurrentSemanticVersion = current,
-                LatestSemanticVersion = latest
+                LatestSemanticVersion = latest,
+                Package = UpdatePackageSecurity.SelectPackage(candidate, _repository)
             };
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -132,12 +135,10 @@ public sealed class GitHubReleaseChecker : IReleaseUpdateChecker
     private static bool IsEnglishEdition(string version)
         => version.Split('+', 2)[0].Trim().EndsWith("-en", StringComparison.OrdinalIgnoreCase);
 
-    private (IReadOnlyList<GitHubRelease> Releases, bool InvalidUrl) ParseReleases(string json, UpdateChannel channel)
+    private (IReadOnlyList<GitHubRelease> Releases, bool InvalidUrl) ParseReleases(string json)
     {
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        var raw = channel == UpdateChannel.Beta
-            ? JsonSerializer.Deserialize<List<GitHubReleaseResponse>>(json, options) ?? new List<GitHubReleaseResponse>()
-            : new List<GitHubReleaseResponse> { JsonSerializer.Deserialize<GitHubReleaseResponse>(json, options) ?? new() };
+        var raw = JsonSerializer.Deserialize<List<GitHubReleaseResponse>>(json, options) ?? new List<GitHubReleaseResponse>();
         var result = new List<GitHubRelease>();
         var invalidUrl = false;
         foreach (var item in raw)
@@ -149,7 +150,14 @@ public sealed class GitHubReleaseChecker : IReleaseUpdateChecker
                 invalidUrl = true;
                 continue;
             }
-            result.Add(new GitHubRelease(item.TagName.Trim(), item.Name, item.Body, url, item.Draft, item.Prerelease, item.PublishedAt, item.CreatedAt));
+            var assets = (item.Assets ?? new()).Where(asset => asset is not null && !string.IsNullOrWhiteSpace(asset.Name))
+                .Select(asset => Uri.TryCreate(asset.BrowserDownloadUrl, UriKind.Absolute, out var downloadUrl)
+                    ? new GitHubReleaseAsset(asset.Name!, downloadUrl, asset.Size, asset.Digest) : null)
+                .OfType<GitHubReleaseAsset>().ToArray();
+            result.Add(new GitHubRelease(item.TagName.Trim(), item.Name, item.Body, url, item.Draft, item.Prerelease, item.PublishedAt, item.CreatedAt)
+            {
+                Assets = assets
+            });
         }
         return (result, invalidUrl);
     }

@@ -1,36 +1,48 @@
-# GitHub Releases 更新检查器
+# GitHub Releases 更新
 
-屏序的更新功能是“发现版本 + 打开 Release 页面”，不是安装器。主程序永远不下载或执行 Release asset。
+屏序先检查新版本并询问用户，只有确认后才下载和安装。更新过程中保留现有组合、壁纸原图与设置。
 
 ## 组件
 
-- `SyncWallpaper.Update.Core`：`GitHubReleaseChecker`、`SemanticVersion`、`ReleaseVersionComparer`、`ReleaseUrlValidator`、`ReleaseNotesSanitizer` 和每周调度策略。
-- `AppRuntime.CheckForUpdatesAsync`：把检查结果写入本地设置和诊断日志；网络异常不会改变壁纸状态。
-- `MainWindow` 设置页：显示当前版本、渠道、上次检查、更新说明和“前往 GitHub Release”。
-- 托盘菜单：提供“检查更新”和“查看 GitHub 项目”，没有下载、安装、重启或 Updater 菜单项。
+- `SyncWallpaper.Update.Core`：版本和渠道选择、每日调度、更新提示策略、官方资产校验、下载、安全解压和程序替换事务。
+- `AppRuntime`：调度检查、保存检查时间、发出新版本通知，并在用户确认后准备更新。网络异常不会改变壁纸状态。
+- 设置页和托盘：提供手动检查；设置页可控制每日检查、选择 Stable/Beta 渠道并查看发布说明。
+- `SyncWallpaper.Updater.exe`：从独立临时目录按需启动，等待主程序正常退出，替换程序组件、验证新版已启动，必要时恢复旧程序。平时不运行。
 
-## 仓库配置
+## 仓库与渠道
 
-`src/SyncWallpaper.Update.Core/UpdateModels.cs` 中的 `ProjectLinks.GitHubOwner` 和 `ProjectLinks.GitHubRepository` 是唯一配置点，当前值为 `skyXIANGTIAN13152` / `SyncWallpaper`。更新检查仍默认关闭；关闭时不会联网。
+`src/SyncWallpaper.Update.Core/UpdateModels.cs` 中的 `ProjectLinks.GitHubOwner` 和 `ProjectLinks.GitHubRepository` 指向 `skyXIANGTIAN13152` / `SyncWallpaper`。
 
-## 请求与渠道
+- Stable 和 Beta 都使用 `GET https://api.github.com/repos/{owner}/{repo}/releases?per_page=100`，先排除草稿并按当前语言筛选。Stable 只接受非预发布的 SemVer tag；Beta 同时接受正式版和预发布版，再按 SemVer 选择最高版本。
+- 默认渠道为 Stable，升级保留已选渠道。希望收到 Beta 预发布版时，需要在设置中选择 Beta。
+- 当前版本来自程序集 `AssemblyInformationalVersion`，支持 `v1.2.3`、`1.3.0-beta.1` 等版本。相同版本、降级版本和其他语言版本不会提示更新。
+- 检查请求包含 GitHub API 版本和应用版本请求头，使用 15 秒超时、取消令牌和 2 MiB 响应上限。
+- 所选渠道没有可用发布时，显示“当前暂无稳定版发布。”或“当前暂无测试版发布。”，这是检查成功而不是网络错误，同样使用每日成功检查间隔。
 
-- Stable：`GET https://api.github.com/repos/{owner}/{repo}/releases/latest`，接受非 draft、非 prerelease 的 SemVer tag。
-- Beta：`GET .../releases?per_page=100`，忽略 draft，允许 prerelease，按 SemVer 选择最高版本。
-- 请求头包含 `Accept: application/vnd.github+json`、`X-GitHub-Api-Version: 2022-11-28` 和 `User-Agent: SyncWallpaper/{informational-version}`。
-- 15 秒超时、CancellationToken、复用单一 `HttpClient`、2 MiB 响应上限；不读取或下载 Release assets。
-- 当前版本来自程序集 `AssemblyInformationalVersion`，支持 `v1.2.3`、`1.0.0-beta.1`、`v1.0.0-rc.2`；同版本和降级版本均不提示。
+## 检查与提示时机
 
-## 周期策略
+新安装默认开启每日自动检查；已有设置中的开关值保持不变。启动约 20 秒后进行第一次到期判断，之后每小时判断一次；成功检查间隔至少 24 小时，失败后至少 1 小时才允许重试。时间按 UTC 比较，任一已记录时间处于未来时停止自动请求，避免系统时钟回拨造成反复请求。
 
-自动检查默认关闭。用户打开后最多每 7 天一次，使用 UTC；系统时钟回拨时不会立即重复请求。手动点击不受 7 天间隔限制；同一时间只保留一个检查任务。自动检查失败静默记录，不弹错误、不改变托盘核心状态。
+手动检查不受自动周期限制，同一时间只执行一个检查任务。自动检查失败只记录状态，不弹出错误干扰使用。发现新版本时先询问；组合编辑器或其他对话框打开期间延后提示。自动提示同一版本一天内不重复，手动检查仍可再次显示提示。
 
-## URL 和 Release Notes
+## 下载与验证
 
-只允许 `https://github.com`，且路径必须属于配置仓库的 `/owner/repository/releases/`。API URL、asset 直链、HTTP、其他域名、其他仓库和异常路径都不会交给浏览器。打开浏览器使用 `ProcessStartInfo.UseShellExecute`，不经过 cmd、PowerShell 或字符串命令拼接。
+用户确认后下载对应版本的 `SyncWallpaper-{version}-win-x64-selfcontained.zip`，即自带运行时的 Windows x64 版，避免升级后因缺少运行时无法启动。保留使用浏览器查看官方 Release 的入口；旧版或不完整发行包没有可用校验信息时不进入自动安装。
 
-Release Notes 作为不可信纯文本交给 WPF `TextBlock`，上限 12,000 字符；不启用 Markdown/HTML、脚本、图片、iframe，不自动打开正文链接。
+下载地址必须属于配置仓库对应版本的 GitHub Release，HTTPS 下载跳转只接受允许的 GitHub 资产域名。包大小上限 512 MiB；校验信息使用 GitHub 提供的 SHA-256 digest，或同一发布中与 ZIP 同名的 `.sha256` 文件。下载数据必须与声明大小和哈希一致。
 
-## 产品边界
+解压前检查所有路径，拒绝路径穿越、符号链接、重复路径、设备名、用户数据目录和异常解压大小。解压后核对发布清单中的版本、x64 平台、自包含模式和语言，再核对主程序文件版本。失败时不替换当前程序。
 
-当前没有 `SyncWallpaper.Updater` 产品调用，也不发布 Updater.exe。不存在更新 staging、更新备份、更新事务恢复、自动关闭主程序、自动替换文件、健康检查或自动回滚流程。产品也不生成普通配置历史备份。
+## 替换、恢复与数据保留
+
+主程序先准备隔离工作目录和更新助手，确认助手就绪后才正常退出。助手核对原进程后等待退出，不强行关闭其他程序。只事务替换 `App`、`Diagnostics` 和 `package-manifest.json`，保留专用桌面图标文件；不执行发行包中的脚本，不申请管理员权限。
+
+`Config`、`Wallpapers`、`Cache`、`Thumbnails`、`Logs`、自定义数据位置及安装目录中的其他文件不会被替换。新版使用相同数据目录启动；初始化成功后回报就绪。如果替换或启动失败，尝试恢复旧程序。无法安全完成恢复时保留旧程序恢复目录并明确报告位置。
+
+下载暂存和旧程序恢复文件只用于本次更新，不属于配置历史或壁纸备份。完成或失败后清理能够安全删除的临时文件，仍被进程占用或恢复所需的文件保留并报告。不会删除不属于本次更新的目录。
+
+## 安全边界
+
+Release Notes 只显示为限长纯文本，不执行 HTML、脚本或正文链接。浏览器只打开配置仓库的 HTTPS Release 页面。
+
+当前发行包未签名。来自同一官方 GitHub Release 的 SHA-256 用于验证下载完整性，不构成独立签名验证。更新依赖官方仓库与 GitHub 的安全性。

@@ -161,7 +161,8 @@ public partial class MainWindow : Window
             ? $"上次检查：{attempted.ToLocalTime():yyyy-MM-dd HH:mm}"
             : "上次检查：从未检查";
         var update = _runtime.LastUpdateResult;
-        UpdateStatusText.Text = update?.UserMessage ?? "默认不联网。";
+        UpdateStatusText.Text = update?.UserMessage ?? (_runtime.Settings.AutomaticUpdateCheckEnabled
+            ? "已开启自动检查，发现新版后会询问是否更新。" : "自动检查已关闭，你仍可以手动检查更新。");
         UpdateNotesText.Text = update?.ReleaseNotes is { Length: > 0 } notes ? "更新内容：\n" + notes : string.Empty;
         OpenReleaseButton.IsEnabled = update?.ReleasePageUrl is { } releaseUrl
             && ReleaseUrlValidator.IsAllowed(releaseUrl, ProjectLinks.RepositorySettings);

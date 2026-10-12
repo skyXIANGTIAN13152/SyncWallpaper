@@ -32,3 +32,4 @@ vendor/
 # these folders are regenerated from the current Release build.
 App/
 Diagnostics/
+/package-manifest.json
