@@ -42,10 +42,29 @@ jobs:
       - name: Build self-contained package
         shell: pwsh
         run: .\publish.ps1 -SelfContained
+      - name: Build current-user EXE installer
+        shell: pwsh
+        run: .\build-installer.ps1
+      - name: Build isolated installer for lifecycle verification
+        shell: pwsh
+        run: .\build-installer.ps1 -OutputDirectory artifacts/installer-test-build -TestBuild
+      - name: Verify installation, upgrades, refusals and data-preserving uninstall
+        shell: pwsh
+        run: |
+          $testInstaller = @(Get-ChildItem artifacts/installer-test-build/*-setup-test.exe)
+          if ($testInstaller.Count -ne 1) { throw 'Expected exactly one isolated test installer.' }
+          .\tests\SyncWallpaper.ScriptTests\Installer.Tests.ps1 -InstallerPath $testInstaller[0].FullName
+      - name: Upload installer verification logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SyncWallpaper-installer-tests
+          path: artifacts/installer-tests/
+          if-no-files-found: ignore
       - name: Generate SHA256SUMS
         shell: pwsh
         run: |
-          Get-ChildItem artifacts\publish -Filter *.zip | Get-FileHash -Algorithm SHA256 |
+          Get-ChildItem artifacts\publish -File | Where-Object { $_.Extension -in '.zip', '.exe' } | Sort-Object Name | Get-FileHash -Algorithm SHA256 |
             ForEach-Object { '{0}  {1}' -f $_.Hash.ToLowerInvariant(), $_.Path.Substring((Resolve-Path artifacts\publish).Path.Length + 1) } |
             Set-Content artifacts\publish\SHA256SUMS.txt -Encoding ASCII
       - name: Upload release artifacts
@@ -54,6 +73,7 @@ jobs:
           name: SyncWallpaper-release
           path: |
             artifacts/publish/*.zip
+            artifacts/publish/*-setup.exe
             artifacts/publish/*.sha256
             artifacts/publish/SHA256SUMS.txt
             CHANGELOG.md
@@ -74,7 +94,7 @@ jobs:
           } elseif (-not ($existing | ConvertFrom-Json).isDraft) {
             throw "Refusing to replace assets on a published release."
           }
-          $assets = @(Get-ChildItem artifacts/publish -File | Where-Object { $_.Extension -in ".zip", ".sha256" -or $_.Name -eq "SHA256SUMS.txt" } | Select-Object -ExpandProperty FullName)
-          if ($assets.Count -ne 5) { throw "Expected two ZIPs, two hashes and SHA256SUMS.txt" }
+          $assets = @(Get-ChildItem artifacts/publish -File | Where-Object { $_.Extension -in ".zip", ".exe", ".sha256" -or $_.Name -eq "SHA256SUMS.txt" } | Select-Object -ExpandProperty FullName)
+          if ($assets.Count -ne 7) { throw "Expected two ZIPs, one setup EXE, three hashes and SHA256SUMS.txt" }
           gh release upload $env:RELEASE_TAG @assets --clobber
           if ($LASTEXITCODE -ne 0) { throw "Draft asset upload failed" }

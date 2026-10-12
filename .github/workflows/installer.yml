@@ -1,0 +1,141 @@
+name: add-exe-installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing published release tag matching this branch's package version
+        required: true
+        type: string
+        default: v1.3.0-beta.1
+
+permissions:
+  contents: write
+
+concurrency:
+  group: add-exe-installer-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  add-installer:
+    if: github.repository == 'skyXIANGTIAN13152/SyncWallpaper'
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_REPOSITORY: skyXIANGTIAN13152/SyncWallpaper
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Download and verify the existing self-contained release package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:RELEASE_TAG -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$') {
+            throw 'Invalid release tag.'
+          }
+          $props = [xml](Get-Content -LiteralPath Directory.Build.props -Raw)
+          $version = [string]$props.Project.PropertyGroup.Version
+          if ($env:RELEASE_TAG -cne ('v' + $version)) {
+            throw "The selected source version must match $env:RELEASE_TAG."
+          }
+          $releaseJson = gh api "repos/$env:RELEASE_REPOSITORY/releases/tags/$env:RELEASE_TAG"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not read the official release metadata.' }
+          $release = $releaseJson | ConvertFrom-Json
+          if ($release.draft -or -not $release.published_at -or $release.tag_name -cne $env:RELEASE_TAG) {
+            throw 'Only an existing published release may receive an additional installer.'
+          }
+          $zipName = "SyncWallpaper-$version-win-x64-selfcontained.zip"
+          $setupName = "SyncWallpaper-$version-win-x64-setup.exe"
+          $hashName = "SyncWallpaper-$version-win-x64-setup.sha256"
+          if (@($release.assets | Where-Object { $_.name -in $setupName, $hashName }).Count -ne 0) {
+            throw 'Installer assets already exist; this workflow never replaces published files.'
+          }
+          $sourceAssets = @($release.assets | Where-Object { $_.name -ceq $zipName })
+          if ($sourceAssets.Count -ne 1) { throw 'Expected exactly one self-contained x64 ZIP.' }
+          $source = $sourceAssets[0]
+          if ($source.size -le 0 -or $source.size -gt 536870912) { throw 'Unexpected package size.' }
+          if ($source.digest -cnotmatch '^sha256:[0-9a-f]{64}$') {
+            throw 'The official release API must provide a SHA-256 digest for the source ZIP.'
+          }
+          New-Item -ItemType Directory -Path artifacts/installer-input -Force | Out-Null
+          $release.assets | Select-Object id, name, size, digest, updated_at |
+            ConvertTo-Json -Depth 4 | Set-Content artifacts/installer-input/original-assets.json -Encoding utf8
+          gh release download $env:RELEASE_TAG --repo $env:RELEASE_REPOSITORY --pattern $zipName --dir artifacts/installer-input
+          if ($LASTEXITCODE -ne 0) { throw 'Could not download the published package.' }
+          $zipPath = Join-Path artifacts/installer-input $zipName
+          if ((Get-Item -LiteralPath $zipPath).Length -ne $source.size) { throw 'Package size does not match GitHub metadata.' }
+          $actual = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -cne $source.digest.Substring(7)) { throw 'Package SHA-256 does not match GitHub metadata.' }
+          Expand-Archive -LiteralPath $zipPath -DestinationPath artifacts/installer-input/package
+          "SETUP_NAME=$setupName" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "SETUP_HASH_NAME=$hashName" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Build installer from the verified published package
+        shell: pwsh
+        run: .\build-installer.ps1 -PackagePath artifacts/installer-input/package -OutputDirectory artifacts/installer-output
+      - name: Build isolated installer for lifecycle verification
+        shell: pwsh
+        run: .\build-installer.ps1 -PackagePath artifacts/installer-input/package -OutputDirectory artifacts/installer-test-build -TestBuild
+      - name: Verify installation, upgrades, refusals and data-preserving uninstall
+        shell: pwsh
+        run: |
+          $testInstaller = @(Get-ChildItem artifacts/installer-test-build/*-setup-test.exe)
+          if ($testInstaller.Count -ne 1) { throw 'Expected exactly one isolated test installer.' }
+          .\tests\SyncWallpaper.ScriptTests\Installer.Tests.ps1 -InstallerPath $testInstaller[0].FullName
+      - name: Upload installer verification logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SyncWallpaper-installer-tests-${{ inputs.release_tag }}
+          path: artifacts/installer-tests/
+          if-no-files-found: ignore
+      - name: Upload installer build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: SyncWallpaper-installer-${{ inputs.release_tag }}
+          path: |
+            artifacts/installer-output/*-setup.exe
+            artifacts/installer-output/*-setup.sha256
+          if-no-files-found: error
+      - name: Add only the EXE and its checksum to the published release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $releaseJson = gh api "repos/$env:RELEASE_REPOSITORY/releases/tags/$env:RELEASE_TAG"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not recheck release assets.' }
+          $release = $releaseJson | ConvertFrom-Json
+          if ($release.draft -or -not $release.published_at -or $release.tag_name -cne $env:RELEASE_TAG) {
+            throw 'Release publication state changed; refusing to upload.'
+          }
+          if (@($release.assets | Where-Object { $_.name -in $env:SETUP_NAME, $env:SETUP_HASH_NAME }).Count -ne 0) {
+            throw 'Installer assets now exist; no published files will be replaced.'
+          }
+          $setupPath = Join-Path artifacts/installer-output $env:SETUP_NAME
+          $hashPath = Join-Path artifacts/installer-output $env:SETUP_HASH_NAME
+          if (-not (Test-Path -LiteralPath $setupPath -PathType Leaf) -or -not (Test-Path -LiteralPath $hashPath -PathType Leaf)) {
+            throw 'The expected installer and checksum were not produced.'
+          }
+          $hash = (Get-FileHash -LiteralPath $setupPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expectedLine = "$hash  $env:SETUP_NAME"
+          if ((Get-Content -LiteralPath $hashPath -Raw).Trim() -cne $expectedLine) {
+            throw 'Installer checksum file does not match the EXE.'
+          }
+          gh release upload $env:RELEASE_TAG $setupPath $hashPath --repo $env:RELEASE_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'Installer upload failed; no existing assets were replaced.' }
+          $updatedJson = gh api "repos/$env:RELEASE_REPOSITORY/releases/tags/$env:RELEASE_TAG"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not verify published assets.' }
+          $updated = $updatedJson | ConvertFrom-Json
+          foreach ($original in @(Get-Content artifacts/installer-input/original-assets.json -Raw | ConvertFrom-Json)) {
+            $current = @($updated.assets | Where-Object { $_.id -eq $original.id })
+            if ($current.Count -ne 1 -or $current[0].name -cne $original.name -or
+                $current[0].size -ne $original.size -or $current[0].digest -cne $original.digest -or
+                $current[0].updated_at -ne $original.updated_at) {
+              throw "An original release asset changed: $($original.name)"
+            }
+          }
+          $publishedSetup = @($updated.assets | Where-Object { $_.name -ceq $env:SETUP_NAME })
+          if ($publishedSetup.Count -ne 1 -or $publishedSetup[0].digest -cne "sha256:$hash") {
+            throw 'Published installer digest could not be verified.'
+          }
+          "Added $env:SETUP_NAME and $env:SETUP_HASH_NAME; all previous release assets were retained." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8

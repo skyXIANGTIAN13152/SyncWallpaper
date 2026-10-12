@@ -6,6 +6,8 @@
 
 [下载当前版本](https://github.com/skyXIANGTIAN13152/SyncWallpaper/releases/tag/v1.3.0-beta.1) · [本次更新说明](docs/RELEASE-1.3.md) · [完整更新说明](CHANGELOG.md)
 
+首次使用推荐下载 `SyncWallpaper-1.3.0-beta.1-win-x64-setup.exe`，双击按向导安装。安装包自带运行时，安装到当前用户目录，无需管理员权限；也可继续使用 ZIP 便携版。已有便携版请在向导中核对并选择原目录，原有组合和壁纸会保留。详见[安装说明](docs/INSTALLATION.md)。
+
 1.3 新增每日检查新版本：发现更新后先询问，确认后下载、校验并替换程序文件，随后重新启动。原有壁纸组合、壁纸原图和设置保留。1.2 已发布版中的通用组合、秘境界面、镂空图标和独立滚动体验继续保留。
 
 ## 核心能力
@@ -89,6 +91,7 @@ SyncWallpaper\
 .\run.ps1
 .\publish.ps1
 .\publish-selfcontained.ps1
+.\build-installer.ps1
 ```
 
 解决方案包含 Core、Windows、App、Diagnostics、Update.Core、Updater 及其测试。自动测试覆盖身份分层、同型号歧义、拓扑稳定、特定/通用组合优先级、完整横竖数量、位置编号、空白位置保留、配置迁移、布局变化时的壁纸事务、档案库刷新、启动恢复、图标状态、更新调度与包校验，以及真实 Windows 只读显示器枚举和句柄稳定性。
@@ -102,6 +105,8 @@ artifacts\publish\win-x64\Diagnostics\SyncWallpaper.Diagnostics.exe
 ```
 
 发布 ZIP 只包含程序、更新助手、文档和安装脚本，不包含用户配置、壁纸、日志、密钥或开发机绝对路径。更新助手按需运行，不常驻。
+
+`build-installer.ps1` 将已发布的自包含目录打包为 `artifacts\publish\SyncWallpaper-{version}-win-x64-setup.exe`，同时生成 SHA-256 校验文件。构建脚本会准备固定版本的 Inno Setup 编译器；安装包不重新编译应用。Windows 的应用列表可以卸载安装版，默认保留组合、壁纸和其他运行数据。
 
 ## 只读诊断
 
