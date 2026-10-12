@@ -131,7 +131,8 @@ Assert-PlainPath $installer
 Assert-PlainPath $logRoot
 Assert-True ((Split-Path -Leaf $installer) -match '-win-x64-setup-test\.exe$') 'Only a separately compiled test installer may run.'
 $installerInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($installer)
-Assert-True ($installerInfo.ProductName -ceq 'SyncWallpaper 安装验证') 'The executable is not a TestBuild installer.'
+# Inno pads PE version strings with spaces; compare the semantic value.
+Assert-True ($installerInfo.ProductName.Trim() -ceq 'SyncWallpaper 安装验证') 'The executable is not a TestBuild installer.'
 Assert-True (-not (Test-Path -LiteralPath $testRegistryPath)) 'An earlier test installation exists; refusing to overwrite it.'
 New-Item -ItemType Directory -Path $testRoot, $logRoot -Force | Out-Null
 
