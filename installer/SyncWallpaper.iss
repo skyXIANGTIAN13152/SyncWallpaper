@@ -397,7 +397,8 @@ begin
     if Error = '' then Error := CheckInstalledVersion(WizardDirValue);
     if Error <> '' then
     begin
-      MsgBox(Error, mbError, MB_OK);
+      // Silent setup simulates Next clicks too; never block it on a dialog.
+      SuppressibleMsgBox(Error, mbError, MB_OK, IDOK);
       Result := False;
     end;
   end;
@@ -405,7 +406,7 @@ end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
-  // Recheck here as well: silent setup does not visit the directory page.
+  // Recheck immediately before installation, including silent setup.
   NeedsRestart := False;
   Result := ValidateInstallDirectory(ExpandConstant('{app}'));
   if Result = '' then Result := CheckInstalledVersion(ExpandConstant('{app}'));
