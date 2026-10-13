@@ -47,6 +47,16 @@ public static class ThemeManager
             ((SolidColorBrush)resources["Purple"]).Color, 0);
         accent.Freeze();
         resources["AccentGradient"] = accent;
+        resources["ProfileSpecificAccent"] = resources["Cyan"];
+        // The approved Mystery palette uses sage for generic profiles. Other
+        // themes retain their contrast-checked secondary accent.
+        if (theme.Id == AppThemeCatalog.Mystery.Id)
+        {
+            var genericAccent = new SolidColorBrush(System.Windows.Media.Color.FromRgb(179, 204, 178));
+            genericAccent.Freeze();
+            resources["ProfileGenericAccent"] = genericAccent;
+        }
+        else resources["ProfileGenericAccent"] = resources["Purple"];
         foreach (var (key, source, alpha) in new[] {
             ("TranslucentPanel", "PanelBackground", (byte)224),
             ("TranslucentSidebar", "SidebarBackground", (byte)232),

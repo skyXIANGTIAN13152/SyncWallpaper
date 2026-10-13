@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0-beta.2 — 2026-10-13
+
+- Distinguish generic profiles with an open corner frame and landscape/portrait displays, and specific profiles with a closed diamond surrounding a display.
+- Use sage green for generic profiles and champagne gold for specific profiles in the Mystery theme. Keep type labels in sync with the icon color and adapt both to the other themes.
+- Show the distinct hollow icons in the profile list and profile editor type badges while keeping the application and tray artwork unchanged.
+- Include the current-user EXE installer alongside both portable ZIP packages, with SHA-256 verification for all three downloads.
+- Preserve profile definitions, wallpaper files, preferences and matching behavior.
+
 ## 1.3.0-beta.1 — 2026-10-13
 
 - Check GitHub Releases automatically once per day, with hourly retry limits after failures and clock-rollback protection. Keep manual checking available and preserve existing automatic-check preferences during upgrade.

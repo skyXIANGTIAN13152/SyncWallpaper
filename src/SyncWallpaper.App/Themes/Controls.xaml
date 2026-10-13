@@ -1,7 +1,13 @@
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:SyncWallpaper.App">
     <!-- Presenter text must inherit its owning control's foreground, including
          selection / disabled / accent states. Never set a global TextBlock color. -->
     <Style TargetType="TextBlock"><Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI"/></Style>
+    <Style TargetType="{x:Type local:ProfileKindGlyph}">
+        <Setter Property="Stroke" Value="{DynamicResource ProfileSpecificAccent}"/>
+        <Style.Triggers>
+            <Trigger Property="IsGeneric" Value="True"><Setter Property="Stroke" Value="{DynamicResource ProfileGenericAccent}"/></Trigger>
+        </Style.Triggers>
+    </Style>
     <Style TargetType="Window">
         <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
         <Setter Property="FontFamily" Value="Microsoft YaHei UI, Segoe UI"/>

@@ -98,7 +98,10 @@
                             <TextBlock x:Name="EditorDescription" Text="为已识别的显示器保存对应壁纸。" Style="{StaticResource EditorHelpText}" Margin="0,8,14,0"/>
                         </StackPanel>
                         <Border Grid.Column="1" VerticalAlignment="Top" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="4" Padding="10,5" Margin="10,3,0,0">
-                            <TextBlock x:Name="ProfileKindText" Text="特定组合" Foreground="{DynamicResource Cyan}" FontSize="12"/>
+                            <StackPanel Orientation="Horizontal">
+                                <local:ProfileKindGlyph x:Name="ProfileKindIcon" Width="18" Height="18" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="ProfileKindText" Text="特定组合" Foreground="{Binding Stroke, ElementName=ProfileKindIcon}" FontSize="12" VerticalAlignment="Center"/>
+                            </StackPanel>
                         </Border>
                     </Grid>
                     <Grid Grid.Row="1">

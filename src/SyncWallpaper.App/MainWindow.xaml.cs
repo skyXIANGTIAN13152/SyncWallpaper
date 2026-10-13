@@ -208,7 +208,7 @@ public partial class MainWindow : Window
             : profile.IsGeneric ? !hasWallpaper ? "未配置" : countsMatch ? "后备待用" : "数量不符" : "未匹配";
         var matchColor = !profile.Enabled ? "TextSecondary" : matched ? profile.IsGeneric ? "Purple" : "Success"
             : profile.IsGeneric ? hasWallpaper && !countsMatch ? "Warning" : "TextSecondary" : "Danger";
-        return new ProfileItem(profile.Id, profile.Name, profile.IsGeneric ? "通用组合" : "特定组合", bindings, details, matchText, (System.Windows.Media.Brush)FindResource(matchColor));
+        return new ProfileItem(profile.Id, profile.Name, profile.IsGeneric, profile.IsGeneric ? "通用组合" : "特定组合", bindings, details, matchText, (System.Windows.Media.Brush)FindResource(matchColor));
     }
 
     private string WallpaperName(MonitorRoleBinding? binding)
@@ -767,5 +767,5 @@ public partial class MainWindow : Window
     private sealed record MonitorCard(string Role, string Name, string Geometry, string Wallpaper, string DisplayInfo, string ColorInfo, string IdentityInfo, string SlotLabel, ImageSource? Preview);
     private sealed record LibraryItem(string Name, string Details, string Path, string FullPath, ImageSource? Preview);
     private sealed record LogItem(string Time, string Category, string Message);
-    private sealed record ProfileItem(string Id, string Name, string KindText, string Bindings, string Details, string MatchText, System.Windows.Media.Brush MatchBrush);
+    private sealed record ProfileItem(string Id, string Name, bool IsGeneric, string KindText, string Bindings, string Details, string MatchText, System.Windows.Media.Brush MatchBrush);
 }

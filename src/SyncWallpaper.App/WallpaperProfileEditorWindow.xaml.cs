@@ -31,6 +31,7 @@ public partial class WallpaperProfileEditorWindow : Window
         InitializeComponent();
         _runtime = runtime;
         _profile = profile;
+        ProfileKindIcon.IsGeneric = profile.IsGeneric;
         _fitChoices = Enum.GetValues<WallpaperFitMode>()
             .Where(x => !profile.IsGeneric || x != WallpaperFitMode.Span)
             .Select(x => new FitChoice(x, FitLabel(x))).ToArray();
@@ -56,7 +57,7 @@ public partial class WallpaperProfileEditorWindow : Window
         {
             Title = EditorTitle.Text = "编辑通用组合";
             EditorDescription.Text = "自由添加横屏与竖屏，再为每个位置选择壁纸。";
-            ProfileKindText.Text = "◇ 通用组合";
+            ProfileKindText.Text = "通用组合";
             RequirementTitle.Text = "匹配所需屏幕";
             PriorityHint.Text = "多套通用组合数量都符合时，数值越高越优先。";
             CompatibleCheck.Visibility = Visibility.Collapsed;
